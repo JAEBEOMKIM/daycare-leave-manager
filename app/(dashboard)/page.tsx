@@ -1,10 +1,44 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { StatCard } from '@/components/ui/StatCard'
 import { GlassCard } from '@/components/ui/GlassCard'
-import { Calendar, Users, TrendingUp } from 'lucide-react'
+import { WeeklyCalendar } from '@/components/dashboard/WeeklyCalendar'
+import { MonthlyCalendar } from '@/components/dashboard/MonthlyCalendar'
+import { Calendar, Users, TrendingUp, Loader } from 'lucide-react'
+
+interface LeaveRecord {
+  id: string
+  employee_id: string
+  leave_type: string
+  start_date: string
+  end_date: string
+}
+
+interface Employee {
+  id: string
+  name: string
+}
 
 export default function Dashboard() {
+  const [loading, setLoading] = useState(true)
+  const [leaves, setLeaves] = useState<LeaveRecord[]>([])
+  const [employees, setEmployees] = useState<Map<string, Employee>>(new Map())
+  const [currentMonth, setCurrentMonth] = useState(new Date())
+
+  useEffect(() => {
+    // TODO: Fetch data from API
+    setLoading(false)
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader className="animate-spin text-primary" size={32} />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -39,14 +73,9 @@ export default function Dashboard() {
 
       {/* Calendar & Summary */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
-        <GlassCard className="lg:col-span-2">
-          <h2 className="font-hanken text-headline-md text-on-surface mb-4">
-            이번주 연차 현황
-          </h2>
-          <p className="text-on-surface-variant">
-            주간 연차 달력은 곧 추가될 예정입니다.
-          </p>
-        </GlassCard>
+        <div className="lg:col-span-2">
+          <WeeklyCalendar date={new Date()} leaves={leaves} employees={employees} />
+        </div>
         <GlassCard>
           <h2 className="font-hanken text-headline-md text-on-surface mb-4">
             빠른 메뉴
@@ -64,9 +93,22 @@ export default function Dashboard() {
             >
               통계 보기
             </a>
+            <a
+              href="/dashboard/employees"
+              className="block w-full p-3 bg-data-purple/20 text-data-purple rounded-lg text-center font-inter text-body-sm hover:bg-data-purple/30 transition-colors"
+            >
+              직원 관리
+            </a>
           </div>
         </GlassCard>
       </div>
+
+      {/* Monthly Calendar */}
+      <MonthlyCalendar
+        date={currentMonth}
+        leaves={leaves}
+        onDateChange={setCurrentMonth}
+      />
     </div>
   )
 }
