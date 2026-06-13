@@ -1424,3 +1424,4 @@ Import traces:
  GET /dashboard 200 in 88ms (next.js: 44ms, application-code: 44ms)
  GET /dashboard 200 in 46ms (next.js: 3ms, application-code: 42ms)
  GET /dashboard 200 in 24ms (next.js: 2ms, application-code: 22ms)
+ GET /dashboard 200 in 317ms (next.js: 12ms, application-code: 305ms)
