@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useStaffStore, positionName } from '@/lib/staff-store'
 import {
   LayoutDashboard,
   CalendarDays,
@@ -32,6 +33,18 @@ interface SidebarProps {
 
 export function Sidebar({ open = false, onClose }: SidebarProps) {
   const pathname = usePathname()
+  const store = useStaffStore()
+
+  // 원장(직급명 '원장')을 우선 표시, 없으면 첫 재직 직원
+  const director =
+    store.staff.find(
+      (s) => positionName(store, s.position_id) === '원장' && s.status !== '퇴사'
+    ) ??
+    store.staff.find((s) => positionName(store, s.position_id) === '원장') ??
+    store.staff[0]
+  const directorName = director?.name ?? '관리자'
+  const directorRole = director ? positionName(store, director.position_id) : '원장'
+  const directorPhoto = director?.photo_url
 
   const isActive = (href: string) =>
     href === '/dashboard'
@@ -122,12 +135,21 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           </a>
 
           <div className="px-4 pt-4 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-on-primary font-bold flex-shrink-0">
-              박
-            </div>
+            {directorPhoto ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={directorPhoto}
+                alt={directorName}
+                className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-on-primary font-bold flex-shrink-0">
+                {directorName.charAt(0)}
+              </div>
+            )}
             <div className="flex-1 min-w-0">
-              <p className="font-label-md text-label-md text-on-surface truncate">박수현</p>
-              <p className="text-[10px] text-secondary truncate">원장</p>
+              <p className="font-label-md text-label-md text-on-surface truncate">{directorName}</p>
+              <p className="text-[10px] text-secondary truncate">{directorRole}</p>
             </div>
           </div>
         </div>
