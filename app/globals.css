@@ -1,86 +1,177 @@
 @import "tailwindcss";
 
-:root {
-  /* Dark mode (default) */
-  --bg-primary: #121127;
-  --surface-deep: #080716;
-  --surface-container: #1e1d34;
-  --surface-container-low: #1a1930;
-  --surface-bright: #38374f;
-  --primary: #dfe1ff;
-  --primary-container: #bbc3ff;
-  --on-primary: #242c5e;
-  --on-surface: #e3dffe;
-  --on-surface-variant: #c6c5d0;
-  --outline: #90909a;
-  --border-subtle: rgba(255, 255, 255, 0.12);
-  --data-teal: #2dd4bf;
-  --data-purple: #a855f7;
-  --error-red: #ffb4ab;
-  --secondary: #ffb1c6;
-  --secondary-container: #9b004f;
-  --on-secondary: #650031;
-  --tertiary: #ebddff;
-  --tertiary-container: #d3bcff;
-  --on-tertiary: #3f008e;
+/* ===== Tailwind v4 theme (LeaveSync) ===== */
+@theme {
+  /* Primary */
+  --color-primary: #4b4bc6;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #6466e1;
+  --color-on-primary-container: #fffbff;
+  --color-primary-fixed: #e1dfff;
+  --color-primary-fixed-dim: #c1c1ff;
+  --color-on-primary-fixed: #08006c;
+  --color-on-primary-fixed-variant: #3433b0;
+  --color-inverse-primary: #c1c1ff;
+  --color-surface-tint: #4d4ec9;
+
+  /* Secondary */
+  --color-secondary: #5d5c76;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #e0dcfb;
+  --color-on-secondary-container: #62607a;
+  --color-secondary-fixed: #e3dffe;
+  --color-secondary-fixed-dim: #c7c3e2;
+  --color-on-secondary-fixed: #1a1930;
+  --color-on-secondary-fixed-variant: #46445d;
+
+  /* Tertiary */
+  --color-tertiary: #835100;
+  --color-on-tertiary: #ffffff;
+  --color-tertiary-container: #a56700;
+  --color-on-tertiary-container: #fffbff;
+  --color-tertiary-fixed: #ffddb9;
+  --color-tertiary-fixed-dim: #ffb963;
+  --color-on-tertiary-fixed: #2b1700;
+  --color-on-tertiary-fixed-variant: #663e00;
+
+  /* Surface / background */
+  --color-background: #f9f9fa;
+  --color-on-background: #1a1c1d;
+  --color-surface: #f9f9fa;
+  --color-on-surface: #1a1c1d;
+  --color-surface-white: #ffffff;
+  --color-surface-dim: #dadadb;
+  --color-surface-bright: #f9f9fa;
+  --color-surface-variant: #e2e2e3;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f3f3f4;
+  --color-surface-container: #eeeeef;
+  --color-surface-container-high: #e8e8e9;
+  --color-surface-container-highest: #e2e2e3;
+  --color-on-surface-variant: #464553;
+
+  /* Outline */
+  --color-outline: #777585;
+  --color-outline-variant: #c7c5d6;
+
+  /* Inverse */
+  --color-inverse-surface: #2f3132;
+  --color-inverse-on-surface: #f0f1f2;
+
+  /* Error */
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #93000a;
+  --color-error-red: #f04438;
+
+  /* Accents */
+  --color-warning-amber: #f79009;
+  --color-success-green: #12b76a;
+  --color-brand-pink: #ea4c89;
+
+  /* Legacy aliases (existing pages depend on these) */
+  --color-success: #12b76a;
+  --color-on-success: #ffffff;
+  --color-success-container: #d1fadf;
+  --color-on-success-container: #065f46;
+  --color-warning: #f79009;
+  --color-on-warning: #ffffff;
+  --color-warning-container: #fef3c7;
+  --color-on-warning-container: #78350f;
+  --color-border-subtle: #e5e7eb;
+
+  /* Spacing */
+  --spacing-sidebar-width: 280px;
+
+  /* Typography scale */
+  --text-display-lg: 36px;
+  --text-display-lg--line-height: 44px;
+  --text-display-lg--letter-spacing: -0.02em;
+  --text-display-lg--font-weight: 700;
+
+  --text-headline-lg: 32px;
+  --text-headline-lg--line-height: 40px;
+  --text-headline-lg--letter-spacing: -0.02em;
+  --text-headline-lg--font-weight: 600;
+
+  --text-headline-md: 24px;
+  --text-headline-md--line-height: 32px;
+  --text-headline-md--font-weight: 600;
+
+  --text-headline-sm: 20px;
+  --text-headline-sm--line-height: 28px;
+  --text-headline-sm--font-weight: 600;
+
+  --text-title-lg: 20px;
+  --text-title-lg--line-height: 28px;
+  --text-title-lg--font-weight: 600;
+
+  --text-title-md: 18px;
+  --text-title-md--line-height: 26px;
+  --text-title-md--font-weight: 600;
+
+  --text-body-lg: 16px;
+  --text-body-lg--line-height: 24px;
+  --text-body-lg--font-weight: 400;
+
+  --text-body-md: 14px;
+  --text-body-md--line-height: 20px;
+  --text-body-md--font-weight: 400;
+
+  --text-label-md: 14px;
+  --text-label-md--line-height: 20px;
+  --text-label-md--font-weight: 500;
+
+  --text-label-sm: 12px;
+  --text-label-sm--line-height: 18px;
+  --text-label-sm--letter-spacing: 0.01em;
+  --text-label-sm--font-weight: 500;
+
+  --text-label-lg: 12px;
+  --text-label-lg--line-height: 16px;
+  --text-label-lg--letter-spacing: 0.5px;
+  --text-label-lg--font-weight: 500;
 }
 
-html {
-  scroll-behavior: smooth;
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
 }
 
 body {
-  background-color: var(--surface-deep);
-  color: var(--on-surface);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
-/* Custom scrollbar for deep space theme */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* Material Symbols */
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+  vertical-align: middle;
 }
 
-::-webkit-scrollbar-track {
-  background: var(--surface-container);
+/* AG Grid: 헤더 라벨 가운데 정렬 */
+.ag-header-cell-label,
+.ag-header-group-cell-label {
+  justify-content: center;
 }
 
-::-webkit-scrollbar-thumb {
-  background: var(--surface-variant, var(--outline));
-  border-radius: 4px;
+/* Custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--primary-container);
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
 }
-
-/* Glass card pattern */
-.glass-card {
-  background: rgba(30, 29, 52, 0.4);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--border-subtle);
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 10px;
 }
-
-/* AI glow effect */
-.ai-glow {
-  position: relative;
-}
-
-.ai-glow::before {
-  content: '';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 150%;
-  height: 150%;
-  background: radial-gradient(circle, rgba(223, 225, 255, 0.15) 0%, rgba(223, 225, 255, 0) 70%);
-  pointer-events: none;
-  z-index: -1;
-}
-
-/* Button glow */
-.btn-glow {
-  box-shadow: 0 0 15px rgba(187, 195, 255, 0.2);
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #999;
 }

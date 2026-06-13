@@ -32,7 +32,7 @@ export function WeeklyCalendar({ date, leaves, employees }: WeeklyCalendarProps)
     const start = new Date(leave.start_date)
     const end = new Date(leave.end_date)
 
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    for (let d = new Date(start); d <= end; ) {
       const dateKey = d.toISOString().split('T')[0]
       const employee = employees.get(leave.employee_id)
 
@@ -44,6 +44,8 @@ export function WeeklyCalendar({ date, leaves, employees }: WeeklyCalendarProps)
         employee: employee?.name || 'Unknown',
         type: leave.leave_type,
       })
+
+      d.setDate(d.getDate() + 1)
     }
   })
 

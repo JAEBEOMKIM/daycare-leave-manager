@@ -49,7 +49,7 @@ export function getMonthWeeks(date: Date): Date[][] {
   let currentWeek: Date[] = []
   let currentDate = new Date(startDate)
 
-  while (currentDate <= lastDay || currentWeek.length < 7) {
+  while (currentDate <= lastDay) {
     currentWeek.push(new Date(currentDate))
     currentDate.setDate(currentDate.getDate() + 1)
 
@@ -57,6 +57,10 @@ export function getMonthWeeks(date: Date): Date[][] {
       weeks.push(currentWeek)
       currentWeek = []
     }
+  }
+
+  if (currentWeek.length > 0) {
+    weeks.push(currentWeek)
   }
 
   return weeks

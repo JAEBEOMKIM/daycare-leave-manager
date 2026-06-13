@@ -1,25 +1,25 @@
 interface BadgeProps {
-  children: string
-  variant?: 'primary' | 'secondary' | 'error' | 'success' | 'warning'
+  children: React.ReactNode
+  variant?: 'primary' | 'success' | 'warning' | 'error' | 'neutral'
   className?: string
 }
 
 const variantStyles = {
-  primary: 'bg-primary/20 text-primary',
-  secondary: 'bg-secondary-container/20 text-secondary',
-  error: 'bg-error-red/20 text-error-red',
-  success: 'bg-data-teal/20 text-data-teal',
-  warning: 'bg-data-purple/20 text-data-purple',
+  primary: 'bg-primary-container text-primary',
+  success: 'bg-success-container text-success',
+  warning: 'bg-warning-container text-warning',
+  error: 'bg-error-container text-error',
+  neutral: 'bg-surface-container text-on-surface',
 }
 
 export function Badge({
   children,
-  variant = 'primary',
+  variant = 'neutral',
   className = '',
 }: BadgeProps) {
   return (
     <span
-      className={`inline-block px-3 py-1 rounded-full text-label-sm font-medium ${variantStyles[variant]} ${className}`}
+      className={`inline-flex items-center rounded-full px-3 py-1 text-label-sm font-medium ${variantStyles[variant]} ${className}`}
     >
       {children}
     </span>
