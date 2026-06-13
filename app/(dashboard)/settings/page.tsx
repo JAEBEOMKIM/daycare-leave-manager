@@ -8,9 +8,9 @@ import {
   updateLeaveTiers,
   addPosition,
   removePosition,
-  setSubstituteEnabled,
   setSubstituteDefaultDays,
   setSubstituteCustomDays,
+  setSubstituteEnabledForStaff,
   resetSubstituteCustom,
   selectSubstitute,
   CURRENT_YEAR,
@@ -89,10 +89,9 @@ export default function SettingsPage() {
   )
 
   // ===== 대체교사 지원일 (실제 직원 + 스토어 기반) =====
-  const substituteEnabled = store.substituteEnabled
   const substituteDefault = store.substituteDefaultDays
 
-  // 재직 중인 직원만, 입사일순 표시
+  // 재직 중인 직원만, 직원별 사용 여부(enabled) 토글 포함
   const substituteRows = useMemo(() => {
     return store.staff
       .filter((s) => s.status !== '퇴사')
@@ -105,12 +104,13 @@ export default function SettingsPage() {
           totalDays: view.isCustom ? view.total : substituteDefault,
           isCustom: view.isCustom,
           usedDays: view.used,
+          enabled: view.enabled,
         }
       })
   }, [store, substituteDefault])
 
-  const customCount = useMemo(
-    () => substituteRows.filter((r) => r.isCustom).length,
+  const enabledCount = useMemo(
+    () => substituteRows.filter((r) => r.enabled).length,
     [substituteRows]
   )
 
@@ -278,117 +278,126 @@ export default function SettingsPage() {
       {/* 섹션 3: 대체교사 지원일 */}
       <Card>
         <div className="border-b border-border-subtle p-6">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <UserCog size={20} className="text-primary" />
-              <h2 className="text-title-md font-semibold text-on-surface">대체교사 지원일</h2>
-            </div>
-            {/* 활성화 토글 */}
-            <button
-              type="button"
-              role="switch"
-              aria-checked={substituteEnabled}
-              onClick={() => setSubstituteEnabled(!substituteEnabled)}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                substituteEnabled ? 'bg-primary' : 'bg-outline-variant'
-              }`}
-              title={substituteEnabled ? '대체교사 지정 사용 중' : '대체교사 지정 꺼짐'}
-            >
-              <span
-                className={`inline-block h-5 w-5 transform rounded-full bg-surface-white shadow transition-transform ${
-                  substituteEnabled ? 'translate-x-5' : 'translate-x-0.5'
-                }`}
-              />
-            </button>
+          <div className="flex items-center gap-2">
+            <UserCog size={20} className="text-primary" />
+            <h2 className="text-title-md font-semibold text-on-surface">대체교사 지원일</h2>
           </div>
           <p className="mt-1 text-label-sm text-on-surface-variant">
-            {substituteEnabled
-              ? '연별 지원 일수를 관리합니다. 전체 기준일 변경 시 개인 설정을 제외한 전원에 반영됩니다.'
-              : '대체교사 지정 기능이 꺼져 있습니다. 연차 등록 시 대체교사 정보를 입력하지 않습니다.'}
+            직원별로 대체교사 지원 사용 여부를 토글로 설정합니다. 토글이 꺼진 직원은 연차 등록 시 대체교사를 지정할 수 없습니다.
           </p>
         </div>
 
-        {substituteEnabled ? (
-          <div className="p-6 space-y-6">
-            <div>
-              <label className="block text-label-md font-medium text-on-surface mb-2">전체 기준일 (연간)</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  min={0}
-                  value={substituteDefault}
-                  onChange={(e) => setSubstituteDefaultDays(e.target.valueAsNumber)}
-                  className="w-28 rounded-lg border border-border-subtle px-4 py-3 text-label-md text-on-surface text-center outline-none focus:ring-2 focus:ring-primary"
-                />
-                <span className="text-label-md text-on-surface-variant">일 / 년</span>
-              </div>
+        <div className="p-6 space-y-6">
+          <div>
+            <label className="block text-label-md font-medium text-on-surface mb-2">전체 기준일 (연간)</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={0}
+                value={substituteDefault}
+                onChange={(e) => setSubstituteDefaultDays(e.target.valueAsNumber)}
+                className="w-28 rounded-lg border border-border-subtle px-4 py-3 text-label-md text-on-surface text-center outline-none focus:ring-2 focus:ring-primary"
+              />
+              <span className="text-label-md text-on-surface-variant">일 / 년</span>
             </div>
+            <p className="mt-1 text-label-sm text-on-surface-variant">
+              전체 기준일 변경 시 개인 설정을 제외한 전원에 반영됩니다.
+            </p>
+          </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <label className="block text-label-md font-medium text-on-surface">개인별 지원일</label>
-                {customCount > 0 ? (
-                  <span className="text-label-sm text-primary font-medium">개인 설정 {customCount}명</span>
-                ) : null}
-              </div>
-              <div className="space-y-3">
-                {substituteRows.map((row) => {
-                  const remaining = row.totalDays - row.usedDays
-                  return (
-                    <div key={row.staffId} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-surface-container p-4">
-                      <div className="flex items-center gap-3 min-w-[160px]">
-                        {row.photoUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={row.photoUrl}
-                            alt={row.name}
-                            className="w-9 h-9 rounded-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-9 h-9 rounded-full bg-primary-container flex items-center justify-center text-on-primary font-bold text-label-sm">
-                            {row.name.charAt(0)}
-                          </div>
-                        )}
-                        <div>
-                          <p className="text-label-md font-medium text-on-surface flex items-center gap-2">
-                            {row.name}
-                            {row.isCustom ? (
-                              <span className="text-[10px] text-primary bg-primary-container/40 rounded-full px-2 py-0.5">개인설정</span>
-                            ) : null}
-                          </p>
-                          <p className="text-label-sm text-on-surface-variant">사용 {row.usedDays}일 · 잔여 {remaining}일</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          min={0}
-                          value={row.totalDays}
-                          onChange={(e) => setSubstituteCustomDays(row.staffId, e.target.valueAsNumber)}
-                          className="w-20 rounded-lg border border-border-subtle px-3 py-2 text-label-md text-on-surface text-center outline-none focus:ring-2 focus:ring-primary"
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <label className="block text-label-md font-medium text-on-surface">직원별 설정</label>
+              <span className="text-label-sm text-primary font-medium">사용 {enabledCount} / {substituteRows.length}명</span>
+            </div>
+            <div className="space-y-3">
+              {substituteRows.map((row) => {
+                const remaining = row.totalDays - row.usedDays
+                return (
+                  <div
+                    key={row.staffId}
+                    className={`flex flex-wrap items-center justify-between gap-3 rounded-lg p-4 transition-colors ${
+                      row.enabled ? 'bg-surface-container' : 'bg-surface-container/40'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3 min-w-[160px]">
+                      {row.photoUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={row.photoUrl}
+                          alt={row.name}
+                          className={`w-9 h-9 rounded-full object-cover ${row.enabled ? '' : 'grayscale opacity-60'}`}
                         />
-                        <span className="text-label-md text-on-surface-variant">일</span>
-                        {row.isCustom ? (
-                          <button
-                            type="button"
-                            onClick={() => resetSubstituteCustom(row.staffId)}
-                            title="전체 기준일로 복귀"
-                            className="p-2 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors"
-                          >
-                            <RotateCcw size={16} />
-                          </button>
-                        ) : null}
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-primary-container flex items-center justify-center text-on-primary font-bold text-label-sm">
+                          {row.name.charAt(0)}
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-label-md font-medium text-on-surface flex items-center gap-2">
+                          {row.name}
+                          {row.enabled && row.isCustom ? (
+                            <span className="text-[10px] text-primary bg-primary-container/40 rounded-full px-2 py-0.5">개인설정</span>
+                          ) : null}
+                          {row.enabled ? null : (
+                            <span className="text-[10px] text-on-surface-variant bg-surface-container-high rounded-full px-2 py-0.5">미사용</span>
+                          )}
+                        </p>
+                        <p className="text-label-sm text-on-surface-variant">
+                          {row.enabled ? `사용 ${row.usedDays}일 · 잔여 ${remaining}일` : '대체교사 지원 미사용'}
+                        </p>
                       </div>
                     </div>
-                  )
-                })}
-                {substituteRows.length === 0 ? (
-                  <p className="text-label-md text-on-surface-variant py-4 text-center">재직 중인 직원이 없습니다.</p>
-                ) : null}
-              </div>
+                    <div className="flex items-center gap-2">
+                      {row.enabled ? (
+                        <>
+                          <input
+                            type="number"
+                            min={0}
+                            value={row.totalDays}
+                            onChange={(e) => setSubstituteCustomDays(row.staffId, e.target.valueAsNumber)}
+                            className="w-20 rounded-lg border border-border-subtle px-3 py-2 text-label-md text-on-surface text-center outline-none focus:ring-2 focus:ring-primary"
+                          />
+                          <span className="text-label-md text-on-surface-variant">일</span>
+                          {row.isCustom ? (
+                            <button
+                              type="button"
+                              onClick={() => resetSubstituteCustom(row.staffId)}
+                              title="전체 기준일로 복귀"
+                              className="p-2 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors"
+                            >
+                              <RotateCcw size={16} />
+                            </button>
+                          ) : null}
+                        </>
+                      ) : null}
+                      {/* 직원별 사용 토글 */}
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={row.enabled}
+                        onClick={() => setSubstituteEnabledForStaff(row.staffId, !row.enabled)}
+                        title={row.enabled ? '대체교사 지원 사용 중 (끄기)' : '대체교사 지원 미사용 (켜기)'}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ml-1 ${
+                          row.enabled ? 'bg-primary' : 'bg-outline-variant'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-5 w-5 transform rounded-full bg-surface-white shadow transition-transform ${
+                            row.enabled ? 'translate-x-5' : 'translate-x-0.5'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+              {substituteRows.length === 0 ? (
+                <p className="text-label-md text-on-surface-variant py-4 text-center">재직 중인 직원이 없습니다.</p>
+              ) : null}
             </div>
           </div>
-        ) : null}
+        </div>
       </Card>
     </div>
   )

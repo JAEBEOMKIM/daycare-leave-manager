@@ -82,6 +82,7 @@ const subBalToRow = (b: SubstituteBalance) => ({
   year: b.year,
   total_days: b.total_days,
   is_custom: b.is_custom,
+  enabled: b.enabled ?? true,
   used_days: b.used_days ?? 0,
 })
 

@@ -134,6 +134,7 @@ export interface SubstituteBalance {
   year: number
   total_days: number // 해당 직원의 연간 지원일 (기본값 또는 개인별 변경값)
   is_custom: boolean // 개인별로 기준일을 변경했는지 여부
+  enabled?: boolean // 이 직원이 대체교사 지원을 사용할 수 있는지 (직원별 토글, 기본 true)
   created_at: string
   updated_at: string
   used_days?: number // 계산값 (월별 사용 합계)

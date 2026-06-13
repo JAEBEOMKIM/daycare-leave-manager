@@ -49,22 +49,46 @@ export interface StaffStoreState {
   substituteDefaultDays: number // 전체 기준 연간 지원일
 }
 
+const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000
+
 // 근속년수 (입사일 → 오늘 기준)
 export function yearsOfService(hireDate: string): number {
   if (!hireDate) return 0
   const diff = Date.now() - new Date(hireDate).getTime()
-  return Math.max(0, Math.floor(diff / (365.25 * 24 * 60 * 60 * 1000)))
+  return Math.max(0, Math.floor(diff / YEAR_MS))
 }
 
-// 연차 기준표로 입사일 기준 총연차 자동 산정
-export function computeEntitlement(hireDate: string, tiers: LeaveTier[]): number {
-  const yos = yearsOfService(hireDate)
+// 특정 기준일(refIso) 시점의 근속년수
+function yearsOfServiceAsOf(hireDate: string, refIso: string): number {
+  if (!hireDate) return 0
+  const diff = new Date(refIso).getTime() - new Date(hireDate).getTime()
+  return Math.max(0, Math.floor(diff / YEAR_MS))
+}
+
+function entitlementFromYos(yos: number, tiers: LeaveTier[]): number {
   const sorted = [...tiers].sort((a, b) => a.minYears - b.minYears)
   let days = sorted[0]?.days ?? 0
   for (const t of sorted) {
     if (yos >= t.minYears) days = t.days
   }
   return days
+}
+
+// 연차 기준표로 입사일 기준 총연차 자동 산정 (오늘 기준 근속)
+export function computeEntitlement(hireDate: string, tiers: LeaveTier[]): number {
+  return entitlementFromYos(yearsOfService(hireDate), tiers)
+}
+
+// 학년연도 시작일(3월 1일) 시점의 근속으로 해당 학년연도 총연차 산정
+export function computeEntitlementForYear(
+  hireDate: string,
+  tiers: LeaveTier[],
+  academicYear: number
+): number {
+  return entitlementFromYos(
+    yearsOfServiceAsOf(hireDate, `${academicYear}-03-01`),
+    tiers
+  )
 }
 
 // ── 이전 연도 데이터 시드 (조회 전용) ──
@@ -241,13 +265,14 @@ export function addStaff(input: StaffInput) {
     created_at: now,
     updated_at: now,
   }
-  // 대체교사 지원일은 전체 기준 기본값
+  // 대체교사 지원일은 전체 기준 기본값, 기본 사용 가능(enabled)
   const newSub: SubstituteBalance = {
     id: nextId('sub'),
     staff_id: id,
     year: CURRENT_YEAR,
-    total_days: 15,
+    total_days: state.substituteDefaultDays,
     is_custom: false,
+    enabled: true,
     used_days: 0,
     created_at: now,
     updated_at: now,
@@ -350,6 +375,7 @@ export function setSubstituteDefaultDays(days: number) {
         year: CURRENT_YEAR,
         total_days: d,
         is_custom: false,
+        enabled: true,
         used_days: 0,
         created_at: now,
         updated_at: now,
@@ -383,6 +409,37 @@ export function setSubstituteCustomDays(staffId: string, days: number) {
       year: CURRENT_YEAR,
       total_days: d,
       is_custom: true,
+      enabled: true,
+      used_days: 0,
+      created_at: now,
+      updated_at: now,
+    }
+    subBalances.push(target)
+  }
+  state = { ...state, subBalances }
+  emit()
+  persist(() => db.upsertSubBalance(target!))
+}
+
+/** 직원별 대체교사 지원 사용 여부 토글 (CURRENT_YEAR 잔액에 기록) */
+export function setSubstituteEnabledForStaff(staffId: string, enabled: boolean) {
+  const now = new Date().toISOString()
+  let target: SubstituteBalance | undefined
+  const subBalances = state.subBalances.map((b) => {
+    if (b.staff_id === staffId && b.year === CURRENT_YEAR) {
+      target = { ...b, enabled, updated_at: now }
+      return target
+    }
+    return b
+  })
+  if (!target) {
+    target = {
+      id: nextId('sub'),
+      staff_id: staffId,
+      year: CURRENT_YEAR,
+      total_days: state.substituteDefaultDays,
+      is_custom: false,
+      enabled,
       used_days: 0,
       created_at: now,
       updated_at: now,
@@ -554,12 +611,12 @@ export function selectLeave(
   const deduction =
     (bal?.special_deduction ?? 0) +
     adjs.filter((a) => a.adjustment_type === '감소').reduce((x, a) => x + a.days, 0)
-  // 올해 기본 연차는 기준표로 자동 산정(입사일 기준), 이전 연도는 기록값 사용
+  // 기본 연차는 해당 학년연도(3월 시작) 시점의 근속을 기준표에 적용해 산정.
+  // (이전 연도 선택 시 그 해 기준의 연차가 반영됨)
   const staff = s.staff.find((st) => st.id === staffId)
-  const base =
-    year === CURRENT_YEAR && staff
-      ? computeEntitlement(staff.hire_date, s.leaveTiers)
-      : bal?.total_days ?? 0
+  const base = staff
+    ? computeEntitlementForYear(staff.hire_date, s.leaveTiers, year)
+    : bal?.total_days ?? 0
   const total = base + addition - deduction
   // 사용 일수 = 해당 학년연도(3월~익년 2월)에 등록된 연차 이력의 차감일 합계
   const used = s.leaveHistory
@@ -573,6 +630,8 @@ export interface SubView {
   used: number
   remaining: number
   isCustom: boolean
+  /** 이 직원이 대체교사 지원을 사용할 수 있는지 (직원별 토글) */
+  enabled: boolean
   /** 해당 회계연도(1~12월)의 대체교사 지원 이력 (연차 이력의 대체교사 정보) */
   records: LeaveHistory[]
 }
@@ -580,14 +639,26 @@ export interface SubView {
 /**
  * 대체교사 지원일 현황 — 회계연도(1~12월) 기준.
  * 지원일 총량은 subBalance(=fiscal year)에서, 사용량은 연차 이력의 대체교사 기간에서 계산.
+ * 이전 연도(해당 연도 잔액 없음)는 가장 최근 회계연도에 설정된 값(12/31 기준)으로 폴백.
  */
 export function selectSubstitute(
   s: StaffStoreState,
   staffId: string,
   year: number
 ): SubView {
-  const bal = s.subBalances.find((b) => b.staff_id === staffId && b.year === year)
-  const total = bal?.total_days ?? 0
+  const exact = s.subBalances.find((b) => b.staff_id === staffId && b.year === year)
+  // 해당 연도 설정이 없으면 가장 최근 회계연도 설정값을 기준으로 사용
+  let bal = exact
+  if (!bal) {
+    let latest: SubstituteBalance | undefined
+    for (const b of s.subBalances) {
+      if (b.staff_id !== staffId) continue
+      if (!latest || b.year > latest.year) latest = b
+    }
+    bal = latest
+  }
+  const total = bal?.total_days ?? s.substituteDefaultDays
+  const enabled = bal?.enabled ?? true
   const records = s.leaveHistory
     .filter(
       (h) =>
@@ -601,7 +672,7 @@ export function selectSubstitute(
     (x, h) => x + countDaysInclusive(h.sub_start!, h.sub_end || h.sub_start!),
     0
   )
-  return { total, used, remaining: total - used, isCustom: bal?.is_custom ?? false, records }
+  return { total, used, remaining: total - used, isCustom: exact?.is_custom ?? false, enabled, records }
 }
 
 /** 연도 목록 — 연차(학년연도)·대체교사(회계연도) 모두 포함, 내림차순 */

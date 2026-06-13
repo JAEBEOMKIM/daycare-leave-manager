@@ -3,7 +3,7 @@
 import { Suspense, useState, useMemo, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { DatePicker } from '@/components/ui/DatePicker'
-import { useStaffStore, selectLeave, addLeaveHistory, CURRENT_YEAR } from '@/lib/staff-store'
+import { useStaffStore, selectLeave, selectSubstitute, addLeaveHistory, CURRENT_YEAR } from '@/lib/staff-store'
 import { useHolidayMap } from '@/lib/holidays'
 import { countLeaveDays } from '@/lib/leave-period'
 import {
@@ -103,8 +103,13 @@ function LeaveForm() {
   const remainingAfter = balance.remaining - expectedDays
   const utilization = balance.total > 0 ? Math.round((balance.used / balance.total) * 100) : 0
 
-  // 전역 설정이 꺼져 있으면 대체교사 입력 자체를 비활성화
-  const subActive = store.substituteEnabled && subEnabled
+  // 선택된 직원의 대체교사 사용 여부(직원별 토글)
+  const staffSubEnabled = useMemo(
+    () => selectSubstitute(store, selectedStaff, CURRENT_YEAR).enabled,
+    [store, selectedStaff]
+  )
+  // 해당 직원이 대체교사 사용 불가면 입력 자체를 비활성화
+  const subActive = staffSubEnabled && subEnabled
   const effectiveSubStart = subSameAsLeave ? startDate : subStart
   const effectiveSubEnd = subSameAsLeave ? endDate : subEnd
   const subDays = useMemo(
@@ -309,8 +314,8 @@ function LeaveForm() {
             </div>
           </div>
 
-          {/* 대체교사 지원 (전역 설정이 켜진 경우에만 노출) */}
-          {store.substituteEnabled ? (
+          {/* 대체교사 지원 (해당 직원이 사용 가능한 경우에만 노출) */}
+          {staffSubEnabled ? (
           <div className="bg-surface-white rounded-xl p-6 shadow-sm border-2 border-primary-container/30 relative overflow-hidden">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-2">
@@ -408,7 +413,14 @@ function LeaveForm() {
               </p>
             )}
           </div>
-          ) : null}
+          ) : (
+            <div className="bg-surface-container/50 rounded-xl p-5 border border-outline-variant/50 flex items-center gap-3">
+              <Users size={20} className="text-on-surface-variant shrink-0" />
+              <p className="text-label-md text-on-surface-variant">
+                이 직원은 대체교사 지원을 사용할 수 없습니다. (설정 &gt; 대체교사 지원일에서 활성화)
+              </p>
+            </div>
+          )}
 
           {/* 유효성 안내 */}
           {errors.length > 0 && (
