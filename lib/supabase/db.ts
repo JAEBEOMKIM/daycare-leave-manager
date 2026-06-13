@@ -171,6 +171,7 @@ export const db = {
   upsertAdjustment: (a: SpecialLeaveAdjustment) => sb().from('leave_adjustments').upsert(adjustmentToRow(a)),
   upsertHistory: (h: LeaveHistory & { sub_name?: string; sub_phone?: string; sub_start?: string; sub_end?: string }) =>
     sb().from('leave_history').upsert(historyToRow(h)),
+  deleteHistory: (id: string) => sb().from('leave_history').delete().eq('id', id),
   upsertPosition: (p: Position) => sb().from('positions').upsert({ id: p.id, kindergarten_id: p.kindergarten_id ?? null, name: p.name }),
   deletePosition: (id: string) => sb().from('positions').delete().eq('id', id),
   upsertSubBalance: (b: SubstituteBalance) => sb().from('substitute_balances').upsert(subBalToRow(b)),

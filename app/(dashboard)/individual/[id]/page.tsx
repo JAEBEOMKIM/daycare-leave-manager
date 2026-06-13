@@ -2,6 +2,7 @@
 
 import { use, useMemo, useState, useCallback } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import {
   useStaffStore,
   selectLeave,
@@ -93,6 +94,7 @@ function leaveIcon(type: string) {
 
 export default function IndividualDetailPage({ params }: PageProps) {
   const { id } = use(params)
+  const router = useRouter()
   const store = useStaffStore()
 
   const staff = useMemo(() => store.staff.find((s) => s.id === id), [store, id])
@@ -499,13 +501,21 @@ export default function IndividualDetailPage({ params }: PageProps) {
             </div>
 
             {/* 푸터 */}
-            <div className="px-6 py-4 border-t border-outline-variant flex justify-end">
+            <div className="px-6 py-4 border-t border-outline-variant flex justify-between items-center gap-3">
               <button
                 type="button"
                 onClick={() => setDetail(null)}
-                className="px-5 py-2 rounded-lg bg-primary text-on-primary text-label-md font-medium hover:opacity-90 transition-opacity"
+                className="px-5 py-2 rounded-lg border border-outline-variant text-on-surface text-label-md font-medium hover:bg-surface-container transition-colors"
               >
                 닫기
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push(`/leave?edit=${detail.id}`)}
+                className="px-5 py-2 rounded-lg bg-primary text-on-primary text-label-md font-medium hover:opacity-90 transition-opacity flex items-center gap-2"
+              >
+                <Pencil size={16} />
+                수정 / 삭제
               </button>
             </div>
           </div>

@@ -1,9 +1,17 @@
 'use client'
 
-import { Suspense, useState, useMemo, useCallback } from 'react'
+import { Suspense, useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { DatePicker } from '@/components/ui/DatePicker'
-import { useStaffStore, selectLeave, selectSubstitute, addLeaveHistory, CURRENT_YEAR } from '@/lib/staff-store'
+import {
+  useStaffStore,
+  selectLeave,
+  selectSubstitute,
+  addLeaveHistory,
+  updateLeaveHistory,
+  removeLeaveHistory,
+  CURRENT_YEAR,
+} from '@/lib/staff-store'
 import { useHolidayMap } from '@/lib/holidays'
 import { countLeaveDays } from '@/lib/leave-period'
 import {
@@ -16,6 +24,7 @@ import {
   User,
   Phone,
   History,
+  Trash2,
 } from 'lucide-react'
 
 const LEAVE_TYPES = [
@@ -58,27 +67,62 @@ function LeaveForm() {
   const store = useStaffStore()
 
   const staffParam = searchParams.get('staff')
-  const initialStaff =
-    staffParam && store.staff.some((s) => s.id === staffParam)
-      ? staffParam
-      : store.staff[0]?.id ?? ''
+  const editId = searchParams.get('edit')
+  const isEdit = !!editId
 
   const today = todayStr()
-  const [selectedStaff, setSelectedStaff] = useState(initialStaff)
-  const [selectedType, setSelectedType] = useState('종일휴가')
-  const [startDate, setStartDate] = useState(today)
-  const [endDate, setEndDate] = useState(today)
-  const [reason, setReason] = useState('')
-  const [pastMode, setPastMode] = useState(false) // 이전(과거) 연차 등록 허용
 
-  const [subEnabled, setSubEnabled] = useState(false)
-  const [subName, setSubName] = useState('')
-  const [subPhone, setSubPhone] = useState('')
-  const [subSameAsLeave, setSubSameAsLeave] = useState(true)
-  const [subStart, setSubStart] = useState('')
-  const [subEnd, setSubEnd] = useState('')
+  // 수정 모드: 기존 이력 레코드 (이미 하이드레이션된 스토어에서 조회)
+  const editRecord = useMemo(
+    () => (editId ? store.leaveHistory.find((h) => h.id === editId) : undefined),
+    [editId, store.leaveHistory]
+  )
+
+  const initialStaff =
+    editRecord?.staff_id ??
+    (staffParam && store.staff.some((s) => s.id === staffParam)
+      ? staffParam
+      : store.staff[0]?.id ?? '')
+
+  // 수정 모드면 기존 값으로, 아니면 기본값으로 lazy 초기화
+  const [selectedStaff, setSelectedStaff] = useState(initialStaff)
+  const [selectedType, setSelectedType] = useState<string>(() => editRecord?.leave_type ?? '종일휴가')
+  const [startDate, setStartDate] = useState(() => editRecord?.start_date ?? today)
+  const [endDate, setEndDate] = useState(() => editRecord?.end_date ?? today)
+  const [reason, setReason] = useState(() => editRecord?.reason ?? '')
+  const [pastMode, setPastMode] = useState(() => !!editRecord && editRecord.start_date < today)
+
+  const [subEnabled, setSubEnabled] = useState(() => !!editRecord?.sub_name)
+  const [subName, setSubName] = useState(() => editRecord?.sub_name ?? '')
+  const [subPhone, setSubPhone] = useState(() => editRecord?.sub_phone ?? '')
+  const [subSameAsLeave, setSubSameAsLeave] = useState(
+    () => !editRecord || (editRecord.sub_start === editRecord.start_date && editRecord.sub_end === editRecord.end_date)
+  )
+  const [subStart, setSubStart] = useState(() => editRecord?.sub_start ?? '')
+  const [subEnd, setSubEnd] = useState(() => editRecord?.sub_end ?? '')
 
   const [submitting, setSubmitting] = useState(false)
+
+  // 새로고침 등으로 레코드가 마운트 후 늦게 하이드레이션되면 1회 프리필
+  const didPrefill = useRef(false)
+  useEffect(() => {
+    if (!editId || didPrefill.current) return
+    const rec = store.leaveHistory.find((h) => h.id === editId)
+    if (!rec) return
+    didPrefill.current = true
+    setSelectedStaff(rec.staff_id)
+    setSelectedType(rec.leave_type)
+    setStartDate(rec.start_date)
+    setEndDate(rec.end_date)
+    setReason(rec.reason ?? '')
+    setPastMode(rec.start_date < today)
+    setSubEnabled(!!rec.sub_name)
+    setSubName(rec.sub_name ?? '')
+    setSubPhone(rec.sub_phone ?? '')
+    setSubSameAsLeave(rec.sub_start === rec.start_date && rec.sub_end === rec.end_date)
+    setSubStart(rec.sub_start ?? '')
+    setSubEnd(rec.sub_end ?? '')
+  }, [editId, store.leaveHistory, today])
 
   const balance = useMemo(
     () => selectLeave(store, selectedStaff, CURRENT_YEAR),
@@ -100,7 +144,9 @@ function LeaveForm() {
     [startDate, endDate, selectedType, holidayMap]
   )
 
-  const remainingAfter = balance.remaining - expectedDays
+  // 수정 모드: 기존 레코드의 사용일수가 balance.used에 이미 포함되어 있으므로 되돌려서 계산
+  const editingDays = isEdit && editRecord?.staff_id === selectedStaff ? editRecord.days_used : 0
+  const remainingAfter = balance.remaining + editingDays - expectedDays
   const utilization = balance.total > 0 ? Math.round((balance.used / balance.total) * 100) : 0
 
   // 선택된 직원의 대체교사 사용 여부(직원별 토글)
@@ -147,7 +193,7 @@ function LeaveForm() {
       e.preventDefault()
       if (submitting || invalid) return // 중복/유효성 위반 방지
       setSubmitting(true)
-      addLeaveHistory({
+      const payload = {
         staff_id: selectedStaff,
         leave_type: selectedType,
         start_date: startDate,
@@ -158,15 +204,29 @@ function LeaveForm() {
         sub_phone: subActive ? subPhone.trim() : undefined,
         sub_start: subActive ? effectiveSubStart : undefined,
         sub_end: subActive ? effectiveSubEnd : undefined,
-      })
-      router.push('/dashboard') // 등록 후 대시보드로 이동
+      }
+      if (isEdit && editId) {
+        updateLeaveHistory(editId, payload)
+        router.push(`/individual/${selectedStaff}`) // 수정 후 개인별 조회로 복귀
+      } else {
+        addLeaveHistory(payload)
+        router.push('/dashboard') // 등록 후 대시보드로 이동
+      }
     },
     [
-      submitting, invalid, router,
+      submitting, invalid, router, isEdit, editId,
       selectedStaff, selectedType, startDate, endDate, expectedDays, reason,
       subActive, subName, subPhone, effectiveSubStart, effectiveSubEnd,
     ]
   )
+
+  const handleDelete = useCallback(() => {
+    if (!editId || submitting) return
+    if (!window.confirm('이 연차 내역을 삭제할까요? 되돌릴 수 없습니다.')) return
+    setSubmitting(true)
+    removeLeaveHistory(editId)
+    router.push(`/individual/${selectedStaff}`)
+  }, [editId, submitting, router, selectedStaff])
 
   const inputCls =
     'w-full bg-surface-bright border border-outline-variant rounded-lg px-4 py-3 text-body-md text-on-surface outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all'
@@ -176,9 +236,13 @@ function LeaveForm() {
     <form onSubmit={handleSubmit} className="max-w-container-max">
       {/* Hero 헤더 */}
       <div className="mb-6">
-        <h1 className="text-headline-lg font-bold text-on-surface">연차 신청</h1>
+        <h1 className="text-headline-lg font-bold text-on-surface">
+          {isEdit ? '연차 내역 수정' : '연차 신청'}
+        </h1>
         <p className="text-on-surface-variant text-body-lg mt-1">
-          아래 정보를 입력해 연차를 등록하세요.
+          {isEdit
+            ? '등록된 연차 내역을 수정하거나 삭제할 수 있습니다.'
+            : '아래 정보를 입력해 연차를 등록하세요.'}
         </p>
       </div>
 
@@ -435,22 +499,38 @@ function LeaveForm() {
           )}
 
           {/* 액션 */}
-          <div className="flex items-center justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => router.push('/dashboard')}
-              className="px-8 py-3 rounded-xl border border-outline-variant text-on-surface font-label-md hover:bg-surface-container transition-colors"
-            >
-              취소
-            </button>
-            <button
-              type="submit"
-              disabled={invalid || submitting}
-              className="px-10 py-3 rounded-xl bg-primary text-on-primary font-label-md font-semibold shadow-lg shadow-primary/25 hover:opacity-90 active:scale-[0.98] transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
-            >
-              {submitting ? '등록 중...' : '등록'}
-              <Send size={18} />
-            </button>
+          <div className="flex items-center justify-between gap-3 pt-2">
+            {/* 삭제 (수정 모드에서만) */}
+            {isEdit ? (
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={submitting}
+                className="px-5 py-3 rounded-xl border border-error/30 text-error font-label-md font-medium hover:bg-error-container/30 transition-colors flex items-center gap-2 disabled:opacity-40"
+              >
+                <Trash2 size={18} />
+                삭제
+              </button>
+            ) : (
+              <span />
+            )}
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => router.push(isEdit ? `/individual/${selectedStaff}` : '/dashboard')}
+                className="px-8 py-3 rounded-xl border border-outline-variant text-on-surface font-label-md hover:bg-surface-container transition-colors"
+              >
+                취소
+              </button>
+              <button
+                type="submit"
+                disabled={invalid || submitting}
+                className="px-10 py-3 rounded-xl bg-primary text-on-primary font-label-md font-semibold shadow-lg shadow-primary/25 hover:opacity-90 active:scale-[0.98] transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
+              >
+                {submitting ? (isEdit ? '수정 중...' : '등록 중...') : isEdit ? '수정' : '등록'}
+                <Send size={18} />
+              </button>
+            </div>
           </div>
         </section>
       </div>

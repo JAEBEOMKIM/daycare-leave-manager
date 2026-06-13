@@ -572,6 +572,43 @@ export function addLeaveHistory(input: LeaveHistoryInput): string {
   return id
 }
 
+// 연차 사용 이력 수정 (과거 데이터 수정용)
+export function updateLeaveHistory(id: string, input: LeaveHistoryInput) {
+  const now = new Date().toISOString()
+  let updated: LeaveHistory | undefined
+  state = {
+    ...state,
+    leaveHistory: state.leaveHistory.map((h) => {
+      if (h.id !== id) return h
+      updated = {
+        ...h,
+        staff_id: input.staff_id,
+        year: input.start_date ? academicYearOf(input.start_date) : h.year,
+        leave_type: input.leave_type as LeaveType,
+        start_date: input.start_date,
+        end_date: input.end_date,
+        days_used: input.days_used,
+        reason: input.reason,
+        sub_name: input.sub_name,
+        sub_phone: input.sub_phone,
+        sub_start: input.sub_start,
+        sub_end: input.sub_end,
+        updated_at: now,
+      }
+      return updated
+    }),
+  }
+  emit()
+  if (updated) persist(() => db.upsertHistory(updated!))
+}
+
+// 연차 사용 이력 삭제
+export function removeLeaveHistory(id: string) {
+  state = { ...state, leaveHistory: state.leaveHistory.filter((h) => h.id !== id) }
+  emit()
+  persist(() => db.deleteHistory(id))
+}
+
 // ── Selectors (순수 함수) ──
 export function selectLeaveHistory(
   s: StaffStoreState,
