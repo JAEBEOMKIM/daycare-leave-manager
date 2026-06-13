@@ -1,7 +1,7 @@
 'use client'
 
 import { getWeekDays, getKoreanDayName, isToday } from '@/lib/utils/date-utils'
-import { Badge } from '@/components/ui/Badge'
+import { Badge } from '@/components/ui/badge'
 
 interface LeaveRecord {
   id: string

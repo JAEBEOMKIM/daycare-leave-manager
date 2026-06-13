@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
         client_id: process.env.NEXT_PUBLIC_NAVER_CLIENT_ID || '',
         client_secret: process.env.NAVER_CLIENT_SECRET || '',
         code,
-        state,
+        state: state ?? '',
       }).toString(),
     })
 

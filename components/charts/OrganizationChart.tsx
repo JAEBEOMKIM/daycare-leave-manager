@@ -8,7 +8,7 @@ export function OrganizationChart() {
     (acc, balance) => ({
       total: acc.total + balance.total_days,
       used: acc.used + balance.used_days,
-      remaining: acc.remaining + balance.remaining_days,
+      remaining: acc.remaining + (balance.remaining_days ?? balance.total_days - balance.used_days),
     }),
     { total: 0, used: 0, remaining: 0 }
   )

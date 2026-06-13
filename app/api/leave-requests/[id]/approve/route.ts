@@ -3,9 +3,10 @@ import { createClient } from '@/lib/supabase/server'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -32,7 +33,7 @@ export async function POST(
         approved_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
       .single()
 
@@ -44,7 +45,7 @@ export async function POST(
     const { data: employee } = await supabase
       .from('leave_requests')
       .select('employee_id, days_consumed')
-      .eq('id', params.id)
+      .eq('id', id)
       .single()
 
     if (employee) {

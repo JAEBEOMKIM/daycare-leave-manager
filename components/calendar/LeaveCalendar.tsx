@@ -78,7 +78,7 @@ export function LeaveCalendar() {
     const daysInMonth = new Date(year, month + 1, 0).getDate()
     const firstDay = new Date(year, month, 1).getDay()
 
-    const days: (string | null)[] = Array.from({ length: firstDay }).fill(null)
+    const days: (string | null)[] = Array.from<string | null>({ length: firstDay }).fill(null)
     for (let i = 1; i <= daysInMonth; i++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`
       days.push(dateStr)

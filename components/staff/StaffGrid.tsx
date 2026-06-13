@@ -8,6 +8,7 @@ import {
   ModuleRegistry,
   themeQuartz,
   type ColDef,
+  type ColGroupDef,
   type GridReadyEvent,
   type ICellRendererParams,
 } from 'ag-grid-community'
@@ -173,7 +174,7 @@ interface StaffGridProps {
 }
 
 export function StaffGrid({ rowData, onGridReady }: StaffGridProps) {
-  const columnDefs = useMemo<ColDef<StaffRow>[]>(
+  const columnDefs = useMemo<(ColDef<StaffRow> | ColGroupDef<StaffRow>)[]>(
     () => [
       {
         headerName: '직원',
