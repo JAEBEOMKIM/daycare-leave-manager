@@ -10,6 +10,7 @@ import {
   mockSubstituteUsage,
 } from './mock-data'
 import { loadAll, seedAll, db, type AppData } from './supabase/db'
+import { academicYearOf, fiscalYearOf, countDaysInclusive } from './leave-period'
 import type {
   Staff,
   Position,
@@ -24,6 +25,7 @@ import type {
 
 export const CURRENT_YEAR = 2026
 const PRIOR_YEARS = [2024, 2025]
+const DEFAULT_SUBSTITUTE_DAYS = 15
 
 // 기본 연차 기준표 (입사일=근속년수 기준)
 const DEFAULT_LEAVE_TIERS: LeaveTier[] = [
@@ -43,6 +45,8 @@ export interface StaffStoreState {
   leaveHistory: LeaveHistory[] // 연차 사용 이력 (대체교사 정보 포함)
   subBalances: SubstituteBalance[]
   subUsages: SubstituteUsage[]
+  substituteEnabled: boolean // 대체교사 지정 기능 사용 여부
+  substituteDefaultDays: number // 전체 기준 연간 지원일
 }
 
 // 근속년수 (입사일 → 오늘 기준)
@@ -105,6 +109,8 @@ function createInitialState(): StaffStoreState {
         .reduce((sum, u) => sum + u.days_used, 0),
     })),
     subUsages: mockSubstituteUsage.map((u) => ({ ...u })),
+    substituteEnabled: true,
+    substituteDefaultDays: DEFAULT_SUBSTITUTE_DAYS,
   }
 }
 
@@ -173,6 +179,10 @@ export async function hydrateFromSupabase() {
       await seedAll(toAppData(state))
       return
     }
+    // 앱 설정(대체교사 활성화/기본일)은 별도 테이블에서 회복력 있게 로드
+    const settings = await db.loadSettings()
+    const enabled = settings['substitute_enabled']
+    const defDays = settings['substitute_default_days']
     state = {
       staff: data.staff,
       positions: data.positions,
@@ -182,6 +192,9 @@ export async function hydrateFromSupabase() {
       leaveHistory: data.leaveHistory,
       subBalances: data.subBalances,
       subUsages: data.subUsages,
+      substituteEnabled: typeof enabled === 'boolean' ? enabled : state.substituteEnabled,
+      substituteDefaultDays:
+        typeof defDays === 'number' ? defDays : state.substituteDefaultDays,
     }
     emit()
   } catch {
@@ -292,6 +305,117 @@ export function addPosition(name: string): string {
   return id
 }
 
+/** 직급 삭제. 해당 직급을 사용 중인 직원이 있으면 삭제하지 않고 false 반환. */
+export function removePosition(id: string): boolean {
+  if (state.staff.some((s) => s.position_id === id)) return false
+  state = { ...state, positions: state.positions.filter((p) => p.id !== id) }
+  emit()
+  persist(() => db.deletePosition(id))
+  return true
+}
+
+// ── 대체교사 지원일 설정 ──
+export function setSubstituteEnabled(enabled: boolean) {
+  state = { ...state, substituteEnabled: enabled }
+  emit()
+  persist(() => db.saveSetting('substitute_enabled', enabled))
+}
+
+function normalizeDays(days: number): number {
+  return Math.max(0, Math.floor(Number.isFinite(days) ? days : 0))
+}
+
+/** 전체 기준 지원일 변경 → 개인설정(is_custom)이 아닌 모든 직원에 반영 */
+export function setSubstituteDefaultDays(days: number) {
+  const d = normalizeDays(days)
+  const now = new Date().toISOString()
+  const touched: SubstituteBalance[] = []
+  const subBalances = state.subBalances.map((b) => {
+    if (b.year === CURRENT_YEAR && !b.is_custom) {
+      const nb = { ...b, total_days: d, updated_at: now }
+      touched.push(nb)
+      return nb
+    }
+    return b
+  })
+  // CURRENT_YEAR 잔액이 없는 직원은 기본값으로 생성
+  const existing = new Set(
+    subBalances.filter((b) => b.year === CURRENT_YEAR).map((b) => b.staff_id)
+  )
+  for (const s of state.staff) {
+    if (!existing.has(s.id)) {
+      const nb: SubstituteBalance = {
+        id: nextId('sub'),
+        staff_id: s.id,
+        year: CURRENT_YEAR,
+        total_days: d,
+        is_custom: false,
+        used_days: 0,
+        created_at: now,
+        updated_at: now,
+      }
+      subBalances.push(nb)
+      touched.push(nb)
+    }
+  }
+  state = { ...state, substituteDefaultDays: d, subBalances }
+  emit()
+  persist(() => db.saveSetting('substitute_default_days', d))
+  for (const b of touched) persist(() => db.upsertSubBalance(b))
+}
+
+/** 개인별 지원일 지정 (is_custom=true) */
+export function setSubstituteCustomDays(staffId: string, days: number) {
+  const d = normalizeDays(days)
+  const now = new Date().toISOString()
+  let target: SubstituteBalance | undefined
+  const subBalances = state.subBalances.map((b) => {
+    if (b.staff_id === staffId && b.year === CURRENT_YEAR) {
+      target = { ...b, total_days: d, is_custom: true, updated_at: now }
+      return target
+    }
+    return b
+  })
+  if (!target) {
+    target = {
+      id: nextId('sub'),
+      staff_id: staffId,
+      year: CURRENT_YEAR,
+      total_days: d,
+      is_custom: true,
+      used_days: 0,
+      created_at: now,
+      updated_at: now,
+    }
+    subBalances.push(target)
+  }
+  state = { ...state, subBalances }
+  emit()
+  persist(() => db.upsertSubBalance(target!))
+}
+
+/** 개인별 지정 해제 → 전체 기준일로 복귀 */
+export function resetSubstituteCustom(staffId: string) {
+  const now = new Date().toISOString()
+  let target: SubstituteBalance | undefined
+  const subBalances = state.subBalances.map((b) => {
+    if (b.staff_id === staffId && b.year === CURRENT_YEAR) {
+      target = {
+        ...b,
+        total_days: state.substituteDefaultDays,
+        is_custom: false,
+        updated_at: now,
+      }
+      return target
+    }
+    return b
+  })
+  if (!target) return
+  state = { ...state, subBalances }
+  emit()
+  persist(() => db.upsertSubBalance(target!))
+}
+
 export function updateLeaveTiers(tiers: LeaveTier[]) {
   const next = tiers.map((t) => ({ ...t }))
   state = { ...state, leaveTiers: next }
@@ -371,7 +495,8 @@ export function addLeaveHistory(input: LeaveHistoryInput): string {
   const record: LeaveHistory = {
     id,
     staff_id: input.staff_id,
-    year: new Date(input.start_date).getFullYear() || CURRENT_YEAR,
+    // 연차는 학년연도 기준으로 그룹핑 (3월~익년 2월)
+    year: input.start_date ? academicYearOf(input.start_date) : CURRENT_YEAR,
     leave_type: input.leave_type as LeaveType,
     start_date: input.start_date,
     end_date: input.end_date,
@@ -436,7 +561,10 @@ export function selectLeave(
       ? computeEntitlement(staff.hire_date, s.leaveTiers)
       : bal?.total_days ?? 0
   const total = base + addition - deduction
-  const used = bal?.used_days ?? 0
+  // 사용 일수 = 해당 학년연도(3월~익년 2월)에 등록된 연차 이력의 차감일 합계
+  const used = s.leaveHistory
+    .filter((h) => h.staff_id === staffId && academicYearOf(h.start_date) === year)
+    .reduce((x, h) => x + (h.days_used ?? 0), 0)
   return { base, addition, deduction, total, used, remaining: total - used, adjustments: adjs }
 }
 
@@ -445,28 +573,47 @@ export interface SubView {
   used: number
   remaining: number
   isCustom: boolean
-  usages: SubstituteUsage[]
+  /** 해당 회계연도(1~12월)의 대체교사 지원 이력 (연차 이력의 대체교사 정보) */
+  records: LeaveHistory[]
 }
 
+/**
+ * 대체교사 지원일 현황 — 회계연도(1~12월) 기준.
+ * 지원일 총량은 subBalance(=fiscal year)에서, 사용량은 연차 이력의 대체교사 기간에서 계산.
+ */
 export function selectSubstitute(
   s: StaffStoreState,
   staffId: string,
   year: number
 ): SubView {
   const bal = s.subBalances.find((b) => b.staff_id === staffId && b.year === year)
-  const usages = s.subUsages
-    .filter((u) => u.staff_id === staffId && u.year === year)
-    .sort((a, b) => a.month - b.month)
-  const usageSum = usages.reduce((x, u) => x + u.days_used, 0)
   const total = bal?.total_days ?? 0
-  const used = bal?.used_days ?? usageSum
-  return { total, used, remaining: total - used, isCustom: bal?.is_custom ?? false, usages }
+  const records = s.leaveHistory
+    .filter(
+      (h) =>
+        h.staff_id === staffId &&
+        !!h.sub_name &&
+        !!h.sub_start &&
+        fiscalYearOf(h.sub_start) === year
+    )
+    .sort((a, b) => (a.sub_start! < b.sub_start! ? 1 : -1))
+  const used = records.reduce(
+    (x, h) => x + countDaysInclusive(h.sub_start!, h.sub_end || h.sub_start!),
+    0
+  )
+  return { total, used, remaining: total - used, isCustom: bal?.is_custom ?? false, records }
 }
 
+/** 연도 목록 — 연차(학년연도)·대체교사(회계연도) 모두 포함, 내림차순 */
 export function selectYears(s: StaffStoreState, staffId: string): number[] {
-  return Array.from(
-    new Set(s.balances.filter((b) => b.staff_id === staffId).map((b) => b.year))
-  ).sort((a, b) => b - a)
+  const set = new Set<number>([CURRENT_YEAR])
+  for (const b of s.balances) if (b.staff_id === staffId) set.add(b.year)
+  for (const h of s.leaveHistory) {
+    if (h.staff_id !== staffId) continue
+    set.add(academicYearOf(h.start_date))
+    if (h.sub_start) set.add(fiscalYearOf(h.sub_start))
+  }
+  return Array.from(set).sort((a, b) => b - a)
 }
 
 // ── Hook ──

@@ -13,6 +13,7 @@ interface DatePickerProps {
   placeholder?: string
   clearable?: boolean
   min?: string // 이 날짜 이전은 선택 불가 (YYYY-MM-DD)
+  max?: string // 이 날짜 이후는 선택 불가 (YYYY-MM-DD)
 }
 
 const PANEL_HEIGHT = 360 // 캘린더 패널 대략 높이
@@ -28,7 +29,7 @@ function parseIso(v: string): Date | undefined {
   return new Date(y, m - 1, d)
 }
 
-export function DatePicker({ value, onChange, placeholder = '날짜 선택', clearable, min }: DatePickerProps) {
+export function DatePicker({ value, onChange, placeholder = '날짜 선택', clearable, min, max }: DatePickerProps) {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState<{ left: number; top?: number; bottom?: number }>({ left: 0 })
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -135,9 +136,12 @@ export function DatePicker({ value, onChange, placeholder = '날짜 선택', cle
               mode="single"
               locale={ko}
               selected={selected}
-              defaultMonth={selected ?? (min ? parseIso(min) : undefined)}
+              defaultMonth={selected ?? (min ? parseIso(min) : max ? parseIso(max) : undefined)}
               onSelect={handleSelect}
-              disabled={min ? { before: parseIso(min) as Date } : undefined}
+              disabled={[
+                ...(min ? [{ before: parseIso(min) as Date }] : []),
+                ...(max ? [{ after: parseIso(max) as Date }] : []),
+              ]}
               captionLayout="dropdown"
               startMonth={new Date(2000, 0)}
               endMonth={new Date(2035, 11)}

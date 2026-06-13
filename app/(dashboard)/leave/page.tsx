@@ -4,6 +4,8 @@ import { Suspense, useState, useMemo, useCallback } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { DatePicker } from '@/components/ui/DatePicker'
 import { useStaffStore, selectLeave, addLeaveHistory, CURRENT_YEAR } from '@/lib/staff-store'
+import { useHolidayMap } from '@/lib/holidays'
+import { countLeaveDays } from '@/lib/leave-period'
 import {
   ClipboardList,
   Users,
@@ -13,6 +15,7 @@ import {
   ShieldCheck,
   User,
   Phone,
+  History,
 } from 'lucide-react'
 
 const LEAVE_TYPES = [
@@ -66,6 +69,7 @@ function LeaveForm() {
   const [startDate, setStartDate] = useState(today)
   const [endDate, setEndDate] = useState(today)
   const [reason, setReason] = useState('')
+  const [pastMode, setPastMode] = useState(false) // 이전(과거) 연차 등록 허용
 
   const [subEnabled, setSubEnabled] = useState(false)
   const [subName, setSubName] = useState('')
@@ -81,14 +85,26 @@ function LeaveForm() {
     [store, selectedStaff]
   )
 
-  const expectedDays = useMemo(() => {
-    if (selectedType === '오전반차' || selectedType === '오후반차') return 0.5
-    return diffDays(startDate, endDate)
-  }, [selectedType, startDate, endDate])
+  // 연차 기간이 연말을 넘기는 경우까지 대비해 시작/종료 연도의 공휴일을 로드
+  const holidayYears = useMemo(() => {
+    const ys = new Set<number>([CURRENT_YEAR])
+    if (startDate) ys.add(Number(startDate.slice(0, 4)))
+    if (endDate) ys.add(Number(endDate.slice(0, 4)))
+    return Array.from(ys)
+  }, [startDate, endDate])
+  const holidayMap = useHolidayMap(holidayYears)
+
+  // 차감 일수 = 토·일·공휴일 제외 근무일 (반차는 0.5)
+  const expectedDays = useMemo(
+    () => countLeaveDays(startDate, endDate, selectedType, holidayMap),
+    [startDate, endDate, selectedType, holidayMap]
+  )
 
   const remainingAfter = balance.remaining - expectedDays
   const utilization = balance.total > 0 ? Math.round((balance.used / balance.total) * 100) : 0
 
+  // 전역 설정이 꺼져 있으면 대체교사 입력 자체를 비활성화
+  const subActive = store.substituteEnabled && subEnabled
   const effectiveSubStart = subSameAsLeave ? startDate : subStart
   const effectiveSubEnd = subSameAsLeave ? endDate : subEnd
   const subDays = useMemo(
@@ -100,23 +116,24 @@ function LeaveForm() {
   const errors = useMemo(() => {
     const e: string[] = []
     if (!startDate) e.push('시작일을 선택하세요.')
-    else if (startDate < today) e.push('연차 시작일은 오늘 이전일 수 없습니다.')
+    else if (!pastMode && startDate < today) e.push('연차 시작일은 오늘 이전일 수 없습니다. (과거 등록은 "이전 연차등록"을 체크하세요)')
     if (!endDate) e.push('종료일을 선택하세요.')
     else if (startDate && endDate < startDate) e.push('연차 종료일은 시작일 이전일 수 없습니다.')
     if (remainingAfter < 0) e.push('잔여 연차가 부족합니다.')
-    if (subEnabled) {
+    if (subActive) {
       if (!subName.trim()) e.push('대체교사 이름을 입력하세요.')
       if (!subPhone.trim()) e.push('대체교사 전화번호를 입력하세요.')
       else if (!PHONE_RE.test(subPhone.trim()))
         e.push('전화번호 형식이 올바르지 않습니다. (예: 010-1234-5678)')
       if (!effectiveSubStart) e.push('대체교사 지원 시작일을 선택하세요.')
-      else if (effectiveSubStart < today) e.push('대체교사 지원 시작일은 오늘 이전일 수 없습니다.')
+      else if (startDate && effectiveSubStart < startDate) e.push('대체교사 지원 시작일은 연차 시작일보다 빠를 수 없습니다.')
       if (!effectiveSubEnd) e.push('대체교사 지원 종료일을 선택하세요.')
       else if (effectiveSubStart && effectiveSubEnd < effectiveSubStart)
         e.push('대체교사 지원 종료일은 시작일 이전일 수 없습니다.')
+      else if (endDate && effectiveSubEnd > endDate) e.push('대체교사 지원 종료일은 연차 종료일보다 늦을 수 없습니다.')
     }
     return e
-  }, [startDate, endDate, today, remainingAfter, subEnabled, subName, subPhone, effectiveSubStart, effectiveSubEnd])
+  }, [startDate, endDate, today, pastMode, remainingAfter, subActive, subName, subPhone, effectiveSubStart, effectiveSubEnd])
 
   const invalid = errors.length > 0
 
@@ -132,17 +149,17 @@ function LeaveForm() {
         end_date: endDate,
         days_used: expectedDays,
         reason: reason || undefined,
-        sub_name: subEnabled ? subName.trim() : undefined,
-        sub_phone: subEnabled ? subPhone.trim() : undefined,
-        sub_start: subEnabled ? effectiveSubStart : undefined,
-        sub_end: subEnabled ? effectiveSubEnd : undefined,
+        sub_name: subActive ? subName.trim() : undefined,
+        sub_phone: subActive ? subPhone.trim() : undefined,
+        sub_start: subActive ? effectiveSubStart : undefined,
+        sub_end: subActive ? effectiveSubEnd : undefined,
       })
       router.push('/dashboard') // 등록 후 대시보드로 이동
     },
     [
       submitting, invalid, router,
       selectedStaff, selectedType, startDate, endDate, expectedDays, reason,
-      subEnabled, subName, subPhone, effectiveSubStart, effectiveSubEnd,
+      subActive, subName, subPhone, effectiveSubStart, effectiveSubEnd,
     ]
   )
 
@@ -250,15 +267,33 @@ function LeaveForm() {
                 </div>
               </div>
 
+              {/* 이전(과거) 연차 등록 토글 */}
+              <label className="flex items-center gap-2 cursor-pointer w-fit">
+                <input
+                  type="checkbox"
+                  checked={pastMode}
+                  onChange={(e) => setPastMode(e.target.checked)}
+                  className="rounded border-outline text-primary focus:ring-primary"
+                />
+                <History size={16} className="text-on-surface-variant" />
+                <span className="text-label-md text-on-surface">이전 연차등록 (과거 일자 선택)</span>
+              </label>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className={labelCls}>시작일 <span className="text-error">*</span></label>
-                  <DatePicker value={startDate} onChange={setStartDate} placeholder="시작일 선택" min={today} />
+                  <DatePicker value={startDate} onChange={setStartDate} placeholder="시작일 선택" min={pastMode ? undefined : today} />
                 </div>
                 <div className="space-y-2">
                   <label className={labelCls}>종료일 <span className="text-error">*</span></label>
-                  <DatePicker value={endDate} onChange={setEndDate} placeholder="종료일 선택" min={startDate || today} />
+                  <DatePicker value={endDate} onChange={setEndDate} placeholder="종료일 선택" min={startDate || (pastMode ? undefined : today)} />
                 </div>
+              </div>
+
+              {/* 차감 일수 안내 */}
+              <div className="rounded-lg bg-surface-container px-4 py-3 flex items-center justify-between text-label-md">
+                <span className="text-on-surface-variant">차감 연차 (토·일·공휴일 제외)</span>
+                <span className="font-bold text-primary">{expectedDays}일</span>
               </div>
 
               <div className="space-y-2">
@@ -274,7 +309,8 @@ function LeaveForm() {
             </div>
           </div>
 
-          {/* 대체교사 지원 */}
+          {/* 대체교사 지원 (전역 설정이 켜진 경우에만 노출) */}
+          {store.substituteEnabled ? (
           <div className="bg-surface-white rounded-xl p-6 shadow-sm border-2 border-primary-container/30 relative overflow-hidden">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-2">
@@ -347,12 +383,15 @@ function LeaveForm() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <div className="space-y-2">
                       <label className={labelCls}>지원 시작일 <span className="text-error">*</span></label>
-                      <DatePicker value={subStart} onChange={setSubStart} placeholder="시작일 선택" min={today} />
+                      <DatePicker value={subStart} onChange={setSubStart} placeholder="시작일 선택" min={startDate} max={endDate} />
                     </div>
                     <div className="space-y-2">
                       <label className={labelCls}>지원 종료일 <span className="text-error">*</span></label>
-                      <DatePicker value={subEnd} onChange={setSubEnd} placeholder="종료일 선택" min={subStart || today} />
+                      <DatePicker value={subEnd} onChange={setSubEnd} placeholder="종료일 선택" min={subStart || startDate} max={endDate} />
                     </div>
+                    <p className="md:col-span-2 text-xs text-on-surface-variant -mt-2">
+                      대체교사 지원 기간은 연차 기간({startDate || '—'} ~ {endDate || '—'}) 안에서 선택할 수 있습니다.
+                    </p>
                   </div>
                 )}
 
@@ -369,6 +408,7 @@ function LeaveForm() {
               </p>
             )}
           </div>
+          ) : null}
 
           {/* 유효성 안내 */}
           {errors.length > 0 && (

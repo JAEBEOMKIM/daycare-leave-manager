@@ -94,6 +94,51 @@ export function useHolidays(year: number) {
   return { holidayMap, source }
 }
 
+/**
+ * 여러 연도의 공휴일을 병합한 맵을 반환한다. (연차 기간이 연말을 넘기는 경우 대비)
+ * 외부 API 병렬 호출 → 실패한 연도는 정적 폴백 유지.
+ */
+export function useHolidayMap(years: number[]): Record<string, string> {
+  const key = Array.from(new Set(years)).sort((a, b) => a - b).join(',')
+
+  const [map, setMap] = useState<Record<string, string>>(() => {
+    const m: Record<string, string> = {}
+    for (const y of years) for (const h of FALLBACK_HOLIDAYS[y] ?? []) m[h.date] = h.name
+    return m
+  })
+
+  useEffect(() => {
+    const yrs = key ? key.split(',').map(Number) : []
+    const controller = new AbortController()
+    let active = true
+
+    // 폴백 먼저 적용
+    const fb: Record<string, string> = {}
+    for (const y of yrs) for (const h of FALLBACK_HOLIDAYS[y] ?? []) fb[h.date] = h.name
+    setMap(fb)
+
+    Promise.all(
+      yrs.map((y) => fetchHolidays(y, controller.signal).catch(() => null))
+    ).then((results) => {
+      if (!active) return
+      const m: Record<string, string> = {}
+      results.forEach((list, i) => {
+        const y = yrs[i]
+        const arr = list && list.length > 0 ? list : FALLBACK_HOLIDAYS[y] ?? []
+        for (const h of arr) m[h.date] = h.name
+      })
+      setMap(m)
+    })
+
+    return () => {
+      active = false
+      controller.abort()
+    }
+  }, [key])
+
+  return map
+}
+
 /** 토(6)·일(0) 여부 */
 export function isWeekend(iso: string): boolean {
   const day = new Date(iso).getDay()

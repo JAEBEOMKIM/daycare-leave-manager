@@ -12,6 +12,7 @@ import {
   CURRENT_YEAR,
 } from '@/lib/staff-store'
 import type { LeaveHistory } from '@/types'
+import { academicRange, fiscalRange } from '@/lib/leave-period'
 import {
   ArrowLeft,
   Pencil,
@@ -97,39 +98,26 @@ export default function IndividualDetailPage({ params }: PageProps) {
   const staff = useMemo(() => store.staff.find((s) => s.id === id), [store, id])
   const years = useMemo(() => selectYears(store, id), [store, id])
   const [selectedYear, setSelectedYear] = useState(CURRENT_YEAR)
-  const [yearBasis, setYearBasis] = useState<'fiscal' | 'academic'>('fiscal')
 
-  // 조회 기간 (회계년도: 1~12월 / 학년도: 3월~익년 2월)
-  const period = useMemo(() => {
-    if (yearBasis === 'academic') {
-      return {
-        start: `${selectedYear}-03-01`,
-        end: `${selectedYear + 1}-02-29`,
-        label: `${selectedYear}학년도 (${selectedYear}.03 ~ ${selectedYear + 1}.02)`,
-      }
-    }
-    return {
-      start: `${selectedYear}-01-01`,
-      end: `${selectedYear}-12-31`,
-      label: `${selectedYear}년 (회계연도)`,
-    }
-  }, [selectedYear, yearBasis])
+  // 연차 = 학년연도(3월~익년 2월), 대체교사 = 회계연도(1~12월)
+  const academic = useMemo(() => academicRange(selectedYear), [selectedYear])
+  const fiscal = useMemo(() => fiscalRange(selectedYear), [selectedYear])
 
   const leave = useMemo(() => selectLeave(store, id, selectedYear), [store, id, selectedYear])
   const substitute = useMemo(() => selectSubstitute(store, id, selectedYear), [store, id, selectedYear])
 
-  // 연차 사용 내역 — 기준 기간으로 필터 (YYYY-MM-DD 문자열 비교)
+  // 연차 사용 내역 — 학년연도 기준 필터 (YYYY-MM-DD 문자열 비교)
   const history = useMemo(
     () =>
       store.leaveHistory
         .filter(
           (h) =>
             h.staff_id === id &&
-            h.start_date >= period.start &&
-            h.start_date <= period.end
+            h.start_date >= academic.start &&
+            h.start_date <= academic.end
         )
         .sort((a, b) => (a.start_date < b.start_date ? 1 : -1)),
-    [store.leaveHistory, id, period]
+    [store.leaveHistory, id, academic]
   )
 
   // 상세 팝업 대상
@@ -180,33 +168,11 @@ export default function IndividualDetailPage({ params }: PageProps) {
           개인별 조회
         </Link>
 
-        {/* 조회 기준 + 연도 선택 */}
+        {/* 연도 선택 (연차=학년연도 / 대체교사=회계연도) */}
         <div className="flex items-center gap-2 flex-wrap">
-          {/* 기준 토글 */}
-          <div className="flex bg-surface-container rounded-lg p-1">
-            <button
-              type="button"
-              onClick={() => setYearBasis('fiscal')}
-              className={`px-3 py-1 rounded-md text-label-sm font-medium transition-colors ${
-                yearBasis === 'fiscal'
-                  ? 'bg-surface-white text-primary shadow-sm'
-                  : 'text-on-surface-variant hover:text-primary'
-              }`}
-            >
-              회계연도
-            </button>
-            <button
-              type="button"
-              onClick={() => setYearBasis('academic')}
-              className={`px-3 py-1 rounded-md text-label-sm font-medium transition-colors ${
-                yearBasis === 'academic'
-                  ? 'bg-surface-white text-primary shadow-sm'
-                  : 'text-on-surface-variant hover:text-primary'
-              }`}
-            >
-              학년도
-            </button>
-          </div>
+          <span className="text-label-sm text-on-surface-variant hidden sm:inline">
+            연차 학년연도 · 대체교사 회계연도
+          </span>
           <select
             value={selectedYear}
             onChange={(e) => setSelectedYear(Number(e.target.value))}
@@ -214,8 +180,7 @@ export default function IndividualDetailPage({ params }: PageProps) {
           >
             {years.map((y) => (
               <option key={y} value={y}>
-                {y}{yearBasis === 'academic' ? '학년도' : '년'}
-                {y === CURRENT_YEAR ? ' (올해)' : ''}
+                {y}년{y === CURRENT_YEAR ? ' (올해)' : ''}
               </option>
             ))}
           </select>
@@ -272,7 +237,7 @@ export default function IndividualDetailPage({ params }: PageProps) {
       <section>
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-title-md font-semibold text-on-surface">
-            연차 현황 <span className="text-on-surface-variant font-normal">({selectedYear}년)</span>
+            연차 현황 <span className="text-on-surface-variant font-normal">({academic.label})</span>
           </h3>
           {!isCurrentYear && (
             <span className="flex items-center gap-1 text-xs text-on-surface-variant bg-surface-container px-2.5 py-1 rounded-full">
@@ -340,7 +305,7 @@ export default function IndividualDetailPage({ params }: PageProps) {
       <section>
         <h3 className="text-title-md font-semibold text-on-surface mb-3 flex items-center gap-2">
           <UserCog size={18} className="text-primary" />
-          대체교사 지원일 <span className="text-on-surface-variant font-normal">({selectedYear}년)</span>
+          대체교사 지원일 <span className="text-on-surface-variant font-normal">({fiscal.label})</span>
           {substitute.isCustom && <span className="text-[10px] text-primary bg-primary-container/40 rounded-full px-2 py-0.5 font-bold">개인설정</span>}
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -354,7 +319,7 @@ export default function IndividualDetailPage({ params }: PageProps) {
       <section className="bg-surface-white rounded-xl border border-outline-variant shadow-sm overflow-hidden">
         <div className="px-6 md:px-8 py-5 border-b border-outline-variant flex items-center justify-between gap-2 flex-wrap">
           <h3 className="text-title-lg font-semibold text-on-surface">연차 사용 내역</h3>
-          <span className="text-label-sm text-on-surface-variant">{period.label}</span>
+          <span className="text-label-sm text-on-surface-variant">{academic.label}</span>
         </div>
         {history.length === 0 ? (
           <p className="px-8 py-10 text-center text-on-surface-variant">해당 기간 사용 내역이 없습니다.</p>
@@ -414,19 +379,30 @@ export default function IndividualDetailPage({ params }: PageProps) {
           <CalendarRange size={20} className="text-warning-amber" />
           <h3 className="text-title-lg font-semibold text-on-surface">대체교사 사용 내역</h3>
         </div>
-        {substitute.usages.length === 0 ? (
+        {substitute.records.length === 0 ? (
           <p className="px-8 py-10 text-center text-on-surface-variant">사용 내역이 없습니다.</p>
         ) : (
           <div className="divide-y divide-outline-variant">
-            {substitute.usages.map((u) => (
-              <div key={u.id} className="px-6 md:px-8 py-4 flex items-center justify-between hover:bg-surface-container-low/50 transition-colors">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 text-title-md font-bold text-warning-amber">{u.month}월</div>
-                  <span className="text-body-md text-on-surface-variant">{u.note}</span>
+            {substitute.records.map((h) => {
+              const single = h.sub_start === h.sub_end
+              return (
+                <div key={h.id} className="px-6 md:px-8 py-4 flex items-center justify-between hover:bg-surface-container-low/50 transition-colors">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 text-warning-amber">
+                      <UserCog size={18} />
+                      <span className="text-body-md font-semibold text-on-surface">{h.sub_name}</span>
+                    </div>
+                    <span className="text-body-md text-on-surface-variant">
+                      {single ? h.sub_start : `${h.sub_start} ~ ${h.sub_end}`}
+                      <span className="text-on-surface-variant/70"> · {h.leave_type}</span>
+                    </span>
+                  </div>
+                  <span className="text-body-md font-semibold text-on-surface">
+                    {h.sub_phone ?? ''}
+                  </span>
                 </div>
-                <span className="text-body-md font-semibold text-on-surface">{u.days_used}일</span>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
         <div className="px-6 md:px-8 py-4 bg-surface-container-low">

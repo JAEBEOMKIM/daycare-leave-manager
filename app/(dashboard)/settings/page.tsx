@@ -2,32 +2,25 @@
 
 import { useState, useCallback, useMemo } from 'react'
 import { Card } from '@/components/ui/card'
-import { Save, UserCog, RotateCcw, Plus, Trash2, CalendarClock, Briefcase, Check } from 'lucide-react'
+import { Save, UserCog, RotateCcw, Plus, Trash2, CalendarClock, Briefcase, Check, X } from 'lucide-react'
 import {
   useStaffStore,
   updateLeaveTiers,
   addPosition,
+  removePosition,
+  setSubstituteEnabled,
+  setSubstituteDefaultDays,
+  setSubstituteCustomDays,
+  resetSubstituteCustom,
+  selectSubstitute,
+  CURRENT_YEAR,
 } from '@/lib/staff-store'
 import type { LeaveTier } from '@/types'
-import {
-  mockStaff,
-  mockSubstituteStandard,
-  mockSubstituteBalance,
-  getSubstituteUsedDays,
-} from '@/lib/mock-data'
 
 let tierSeq = 0
 function newTierId() {
   tierSeq += 1
   return `tier-new-${tierSeq}`
-}
-
-interface SubstituteRow {
-  staffId: string
-  name: string
-  totalDays: number
-  isCustom: boolean
-  usedDays: number
 }
 
 export default function SettingsPage() {
@@ -86,42 +79,40 @@ export default function SettingsPage() {
     [newPosition, store.positions]
   )
 
-  // ===== 대체교사 지원일 =====
-  const [substituteDefault, setSubstituteDefault] = useState(
-    mockSubstituteStandard.default_days
-  )
-  const [substituteRows, setSubstituteRows] = useState<SubstituteRow[]>(() =>
-    mockStaff.map((staff) => {
-      const bal = mockSubstituteBalance.find((b) => b.staff_id === staff.id)
-      return {
-        staffId: staff.id,
-        name: staff.name,
-        totalDays: bal?.total_days ?? mockSubstituteStandard.default_days,
-        isCustom: bal?.is_custom ?? false,
-        usedDays: getSubstituteUsedDays(staff.id, mockSubstituteStandard.year),
-      }
-    })
-  )
-  const handleSubstituteDefaultChange = useCallback((value: number) => {
-    const next = Number.isNaN(value) ? 0 : value
-    setSubstituteDefault(next)
-    setSubstituteRows((prev) => prev.map((r) => (r.isCustom ? r : { ...r, totalDays: next })))
-  }, [])
-  const handleSubstituteRowChange = useCallback((staffId: string, value: number) => {
-    const next = Number.isNaN(value) ? 0 : value
-    setSubstituteRows((prev) =>
-      prev.map((r) => (r.staffId === staffId ? { ...r, totalDays: next, isCustom: true } : r))
-    )
-  }, [])
-  const handleSubstituteReset = useCallback(
-    (staffId: string) => {
-      setSubstituteRows((prev) =>
-        prev.map((r) => (r.staffId === staffId ? { ...r, totalDays: substituteDefault, isCustom: false } : r))
-      )
+  const handleRemovePosition = useCallback(
+    (id: string, name: string, count: number) => {
+      if (count > 0) return // 사용 중이면 삭제 불가 (UI에서도 비활성)
+      if (!window.confirm(`'${name}' 직급을 삭제할까요?`)) return
+      removePosition(id)
     },
-    [substituteDefault]
+    []
   )
-  const customCount = useMemo(() => substituteRows.filter((r) => r.isCustom).length, [substituteRows])
+
+  // ===== 대체교사 지원일 (실제 직원 + 스토어 기반) =====
+  const substituteEnabled = store.substituteEnabled
+  const substituteDefault = store.substituteDefaultDays
+
+  // 재직 중인 직원만, 입사일순 표시
+  const substituteRows = useMemo(() => {
+    return store.staff
+      .filter((s) => s.status !== '퇴사')
+      .map((s) => {
+        const view = selectSubstitute(store, s.id, CURRENT_YEAR)
+        return {
+          staffId: s.id,
+          name: s.name,
+          photoUrl: s.photo_url,
+          totalDays: view.isCustom ? view.total : substituteDefault,
+          isCustom: view.isCustom,
+          usedDays: view.used,
+        }
+      })
+  }, [store, substituteDefault])
+
+  const customCount = useMemo(
+    () => substituteRows.filter((r) => r.isCustom).length,
+    [substituteRows]
+  )
 
   return (
     <div className="space-y-8">
@@ -237,17 +228,32 @@ export default function SettingsPage() {
         </div>
         <div className="p-6 space-y-4">
           <div className="flex flex-wrap gap-2">
-            {store.positions.map((p) => (
-              <span
-                key={p.id}
-                className="inline-flex items-center gap-2 rounded-full bg-secondary-container px-3 py-1.5 text-label-md text-on-secondary-container"
-              >
-                {p.name}
-                <span className="text-[11px] text-on-surface-variant">
-                  {staffCountByPosition[p.id] ?? 0}명
+            {store.positions.map((p) => {
+              const count = staffCountByPosition[p.id] ?? 0
+              const deletable = count === 0
+              return (
+                <span
+                  key={p.id}
+                  className="inline-flex items-center gap-2 rounded-full bg-secondary-container px-3 py-1.5 text-label-md text-on-secondary-container"
+                >
+                  {p.name}
+                  <span className="text-[11px] text-on-surface-variant">{count}명</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemovePosition(p.id, p.name, count)}
+                    disabled={!deletable}
+                    title={deletable ? '직급 삭제' : '직원이 있어 삭제할 수 없습니다'}
+                    className={`-mr-1 rounded-full p-0.5 transition-colors ${
+                      deletable
+                        ? 'text-on-surface-variant hover:text-error hover:bg-error-container/40'
+                        : 'text-outline/40 cursor-not-allowed'
+                    }`}
+                  >
+                    <X size={14} />
+                  </button>
                 </span>
-              </span>
-            ))}
+              )
+            })}
           </div>
 
           <form onSubmit={handleAddPosition} className="flex gap-2 max-w-md">
@@ -272,81 +278,117 @@ export default function SettingsPage() {
       {/* 섹션 3: 대체교사 지원일 */}
       <Card>
         <div className="border-b border-border-subtle p-6">
-          <div className="flex items-center gap-2">
-            <UserCog size={20} className="text-primary" />
-            <h2 className="text-title-md font-semibold text-on-surface">대체교사 지원일</h2>
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <UserCog size={20} className="text-primary" />
+              <h2 className="text-title-md font-semibold text-on-surface">대체교사 지원일</h2>
+            </div>
+            {/* 활성화 토글 */}
+            <button
+              type="button"
+              role="switch"
+              aria-checked={substituteEnabled}
+              onClick={() => setSubstituteEnabled(!substituteEnabled)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                substituteEnabled ? 'bg-primary' : 'bg-outline-variant'
+              }`}
+              title={substituteEnabled ? '대체교사 지정 사용 중' : '대체교사 지정 꺼짐'}
+            >
+              <span
+                className={`inline-block h-5 w-5 transform rounded-full bg-surface-white shadow transition-transform ${
+                  substituteEnabled ? 'translate-x-5' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
           </div>
           <p className="mt-1 text-label-sm text-on-surface-variant">
-            연별 지원 일수를 관리합니다. 전체 기준일 또는 개인별로 변경할 수 있습니다.
+            {substituteEnabled
+              ? '연별 지원 일수를 관리합니다. 전체 기준일 변경 시 개인 설정을 제외한 전원에 반영됩니다.'
+              : '대체교사 지정 기능이 꺼져 있습니다. 연차 등록 시 대체교사 정보를 입력하지 않습니다.'}
           </p>
         </div>
-        <div className="p-6 space-y-6">
-          <div>
-            <label className="block text-label-md font-medium text-on-surface mb-2">전체 기준일 (연간)</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min={0}
-                value={substituteDefault}
-                onChange={(e) => handleSubstituteDefaultChange(parseInt(e.target.value))}
-                className="w-28 rounded-lg border border-border-subtle px-4 py-3 text-label-md text-on-surface text-center outline-none focus:ring-2 focus:ring-primary"
-              />
-              <span className="text-label-md text-on-surface-variant">일 / 년</span>
-            </div>
-          </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <label className="block text-label-md font-medium text-on-surface">개인별 지원일</label>
-              {customCount > 0 && (
-                <span className="text-label-sm text-primary font-medium">개인 설정 {customCount}명</span>
-              )}
+        {substituteEnabled ? (
+          <div className="p-6 space-y-6">
+            <div>
+              <label className="block text-label-md font-medium text-on-surface mb-2">전체 기준일 (연간)</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  value={substituteDefault}
+                  onChange={(e) => setSubstituteDefaultDays(e.target.valueAsNumber)}
+                  className="w-28 rounded-lg border border-border-subtle px-4 py-3 text-label-md text-on-surface text-center outline-none focus:ring-2 focus:ring-primary"
+                />
+                <span className="text-label-md text-on-surface-variant">일 / 년</span>
+              </div>
             </div>
-            <div className="space-y-3">
-              {substituteRows.map((row) => {
-                const remaining = row.totalDays - row.usedDays
-                return (
-                  <div key={row.staffId} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-surface-container p-4">
-                    <div className="flex items-center gap-3 min-w-[160px]">
-                      <div className="w-9 h-9 rounded-full bg-primary-container flex items-center justify-center text-on-primary font-bold text-label-sm">
-                        {row.name.charAt(0)}
+
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <label className="block text-label-md font-medium text-on-surface">개인별 지원일</label>
+                {customCount > 0 ? (
+                  <span className="text-label-sm text-primary font-medium">개인 설정 {customCount}명</span>
+                ) : null}
+              </div>
+              <div className="space-y-3">
+                {substituteRows.map((row) => {
+                  const remaining = row.totalDays - row.usedDays
+                  return (
+                    <div key={row.staffId} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-surface-container p-4">
+                      <div className="flex items-center gap-3 min-w-[160px]">
+                        {row.photoUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={row.photoUrl}
+                            alt={row.name}
+                            className="w-9 h-9 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-9 h-9 rounded-full bg-primary-container flex items-center justify-center text-on-primary font-bold text-label-sm">
+                            {row.name.charAt(0)}
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-label-md font-medium text-on-surface flex items-center gap-2">
+                            {row.name}
+                            {row.isCustom ? (
+                              <span className="text-[10px] text-primary bg-primary-container/40 rounded-full px-2 py-0.5">개인설정</span>
+                            ) : null}
+                          </p>
+                          <p className="text-label-sm text-on-surface-variant">사용 {row.usedDays}일 · 잔여 {remaining}일</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-label-md font-medium text-on-surface flex items-center gap-2">
-                          {row.name}
-                          {row.isCustom && (
-                            <span className="text-[10px] text-primary bg-primary-container/40 rounded-full px-2 py-0.5">개인설정</span>
-                          )}
-                        </p>
-                        <p className="text-label-sm text-on-surface-variant">사용 {row.usedDays}일 · 잔여 {remaining}일</p>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          min={0}
+                          value={row.totalDays}
+                          onChange={(e) => setSubstituteCustomDays(row.staffId, e.target.valueAsNumber)}
+                          className="w-20 rounded-lg border border-border-subtle px-3 py-2 text-label-md text-on-surface text-center outline-none focus:ring-2 focus:ring-primary"
+                        />
+                        <span className="text-label-md text-on-surface-variant">일</span>
+                        {row.isCustom ? (
+                          <button
+                            type="button"
+                            onClick={() => resetSubstituteCustom(row.staffId)}
+                            title="전체 기준일로 복귀"
+                            className="p-2 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors"
+                          >
+                            <RotateCcw size={16} />
+                          </button>
+                        ) : null}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        min={0}
-                        value={row.totalDays}
-                        onChange={(e) => handleSubstituteRowChange(row.staffId, parseInt(e.target.value))}
-                        className="w-20 rounded-lg border border-border-subtle px-3 py-2 text-label-md text-on-surface text-center outline-none focus:ring-2 focus:ring-primary"
-                      />
-                      <span className="text-label-md text-on-surface-variant">일</span>
-                      {row.isCustom && (
-                        <button
-                          type="button"
-                          onClick={() => handleSubstituteReset(row.staffId)}
-                          title="전체 기준일로 복귀"
-                          className="p-2 rounded-lg text-on-surface-variant hover:bg-surface-container-high transition-colors"
-                        >
-                          <RotateCcw size={16} />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
+                {substituteRows.length === 0 ? (
+                  <p className="text-label-md text-on-surface-variant py-4 text-center">재직 중인 직원이 없습니다.</p>
+                ) : null}
+              </div>
             </div>
           </div>
-        </div>
+        ) : null}
       </Card>
     </div>
   )

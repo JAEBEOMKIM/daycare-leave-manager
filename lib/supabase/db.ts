@@ -171,7 +171,22 @@ export const db = {
   upsertHistory: (h: LeaveHistory & { sub_name?: string; sub_phone?: string; sub_start?: string; sub_end?: string }) =>
     sb().from('leave_history').upsert(historyToRow(h)),
   upsertPosition: (p: Position) => sb().from('positions').upsert({ id: p.id, kindergarten_id: p.kindergarten_id ?? null, name: p.name }),
+  deletePosition: (id: string) => sb().from('positions').delete().eq('id', id),
   upsertSubBalance: (b: SubstituteBalance) => sb().from('substitute_balances').upsert(subBalToRow(b)),
+  // ── 앱 설정(key-value, jsonb). 테이블 미존재 시 조용히 무시 ──
+  saveSetting: (key: string, value: unknown) =>
+    sb().from('app_settings').upsert({ key, value }),
+  loadSettings: async (): Promise<Record<string, unknown>> => {
+    try {
+      const { data, error } = await sb().from('app_settings').select('key,value')
+      if (error || !data) return {}
+      const m: Record<string, unknown> = {}
+      for (const r of data as Array<{ key: string; value: unknown }>) m[r.key] = r.value
+      return m
+    } catch {
+      return {}
+    }
+  },
   replaceLeaveTiers: async (tiers: LeaveTier[]) => {
     const c = sb()
     await c.from('leave_tiers').delete().neq('id', '___none___')
