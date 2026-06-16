@@ -17,7 +17,7 @@ function AuthCallbackContent() {
 
         // Exchange code for session
         const code = searchParams.get('code')
-        const next = searchParams.get('next') || '/dashboard'
+        const next = searchParams.get('next') || '/'
 
         if (!code) {
           setError('인증 코드를 받지 못했습니다')
