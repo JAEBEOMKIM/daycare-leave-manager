@@ -58,6 +58,13 @@ export async function getSessionProfile(): Promise<SessionProfile | null> {
   } = await supabase.auth.getUser()
   if (!user) return null
 
+  // allowlist 이메일이면 admin 자동 승격(프로필 보장). 미생성 함수면 조용히 무시.
+  try {
+    await supabase.rpc('sync_my_role')
+  } catch {
+    /* noop */
+  }
+
   const { data: profile } = await supabase
     .from('profiles')
     .select('role, kindergarten_id, status')
@@ -102,7 +109,8 @@ export async function requireDashboardTenant(): Promise<string | null> {
   const profile = await getSessionProfile()
   if (!profile) redirect('/auth/login')
 
-  if (profile.role === 'admin') return null // 관리자는 테넌트 게이트 없이 통과
+  // 관리자는 (테넌트별) 대시보드 대신 관리자 콘솔로. 특정 어린이집 열람 기능은 추후.
+  if (profile.role === 'admin') redirect('/admin/daycares')
 
   if (!profile.kindergartenId) redirect('/onboarding/register')
   if (profile.tenantStatus === 'pending') redirect('/onboarding/pending')
