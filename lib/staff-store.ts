@@ -1,15 +1,7 @@
 'use client'
 
 import { useSyncExternalStore } from 'react'
-import {
-  mockStaff,
-  mockPositions,
-  mockStaffLeaveBalance,
-  mockLeaveHistory,
-  mockSubstituteBalance,
-  mockSubstituteUsage,
-} from './mock-data'
-import { loadAll, seedAll, db, type AppData } from './supabase/db'
+import { loadAll, seedTenantDefaults, setDbTenant, db } from './supabase/db'
 import { academicYearOf, fiscalYearOf, countDaysInclusive } from './leave-period'
 import type {
   Staff,
@@ -24,8 +16,13 @@ import type {
 } from '@/types'
 
 export const CURRENT_YEAR = 2026
-const PRIOR_YEARS = [2024, 2025]
 const DEFAULT_SUBSTITUTE_DAYS = 15
+
+// 현재 로그인한 원장의 어린이집(테넌트) id. 하이드레이션 시 설정됨.
+let currentTenant: string | null = null
+export function getCurrentTenant() {
+  return currentTenant
+}
 
 // 기본 연차 기준표 (입사일=근속년수 기준)
 const DEFAULT_LEAVE_TIERS: LeaveTier[] = [
@@ -91,54 +88,26 @@ export function computeEntitlementForYear(
   )
 }
 
-// ── 이전 연도 데이터 시드 (조회 전용) ──
-function seedPriorBalances(): StaffLeaveBalance[] {
-  const rows: StaffLeaveBalance[] = []
-  mockStaff.forEach((s, i) => {
-    PRIOR_YEARS.forEach((year) => {
-      const total = s.position_id === 'pos-001' ? 15 : 11
-      const used = [7, 9, 8, 6][i % 4] - (year === 2024 ? 1 : 0)
-      rows.push({
-        id: `bal-${s.id}-${year}`,
-        staff_id: s.id,
-        year,
-        total_days: total,
-        used_days: Math.max(0, used),
-        special_addition: 0,
-        special_deduction: 0,
-        created_at: `${year}-01-01T00:00:00Z`,
-        updated_at: `${year}-01-01T00:00:00Z`,
-      })
-    })
-  })
-  return rows
-}
+// 신규 테넌트 기본 직급 (승인 직후 빈 어린이집 시드용)
+const DEFAULT_POSITIONS = ['원장', '부원장', '교사', '조리사']
 
-function createInitialState(): StaffStoreState {
+// 멀티테넌트: 초기 상태는 비어 있음 (인증·테넌트 확정 후 Supabase에서 채움)
+function emptyState(): StaffStoreState {
   return {
-    staff: mockStaff.map((s) => ({ ...s })),
-    positions: mockPositions.map((p) => ({ ...p })),
+    staff: [],
+    positions: [],
     leaveTiers: DEFAULT_LEAVE_TIERS.map((t) => ({ ...t })),
-    balances: [
-      ...mockStaffLeaveBalance.map((b) => ({ ...b })),
-      ...seedPriorBalances(),
-    ],
+    balances: [],
     adjustments: [],
-    leaveHistory: mockLeaveHistory.map((h) => ({ ...h })),
-    subBalances: mockSubstituteBalance.map((b) => ({
-      ...b,
-      // 폼에서 직접 수정 가능하도록 used_days를 명시 보관 (없으면 월별 합계로 대체)
-      used_days: mockSubstituteUsage
-        .filter((u) => u.staff_id === b.staff_id && u.year === b.year)
-        .reduce((sum, u) => sum + u.days_used, 0),
-    })),
-    subUsages: mockSubstituteUsage.map((u) => ({ ...u })),
+    leaveHistory: [],
+    subBalances: [],
+    subUsages: [],
     substituteEnabled: true,
     substituteDefaultDays: DEFAULT_SUBSTITUTE_DAYS,
   }
 }
 
-let state: StaffStoreState = createInitialState()
+let state: StaffStoreState = emptyState()
 const listeners = new Set<() => void>()
 
 function emit() {
@@ -175,55 +144,62 @@ function persist(run: () => unknown) {
 // ── Supabase 하이드레이션 ──
 let hydrated = false
 
-function toAppData(s: StaffStoreState): AppData {
-  return {
-    positions: s.positions,
-    leaveTiers: s.leaveTiers,
-    staff: s.staff,
-    balances: s.balances,
-    adjustments: s.adjustments,
-    leaveHistory: s.leaveHistory,
-    subBalances: s.subBalances,
-    subUsages: s.subUsages,
-  }
-}
-
 /**
- * 앱 로드 시 1회: Supabase에서 전체 데이터 로드 → 스토어 교체.
- * Supabase가 비어 있으면 현재(mock) 상태를 업로드(seed).
- * 스키마 미생성/네트워크 오류 시 mock 상태 유지.
+ * 로그인한 원장의 어린이집(테넌트) 데이터를 Supabase에서 로드 → 스토어 교체.
+ * 멀티테넌트: 다른 어린이집 데이터는 RLS 로 차단되며, mock 폴백은 사용하지 않는다.
+ * 빈(신규 승인) 테넌트면 기본 직급·연차기준표를 시드한다.
  */
-export async function hydrateFromSupabase() {
-  if (hydrated) return
+export async function hydrateFromSupabase(tenantId: string) {
+  if (!tenantId) return
+  if (hydrated && currentTenant === tenantId) return
+  currentTenant = tenantId
+  setDbTenant(tenantId)
   hydrated = true
   try {
-    const data = await loadAll()
-    if (data.staff.length === 0) {
-      // 최초 실행: 현재 mock 상태를 Supabase에 시드
-      await seedAll(toAppData(state))
-      return
+    let data = await loadAll(tenantId)
+
+    // 신규 테넌트: 기본 직급 + 기본 연차기준표 시드 후 재로드
+    if (data.positions.length === 0) {
+      const now = new Date().toISOString()
+      const seededPositions: Position[] = DEFAULT_POSITIONS.map((name, i) => ({
+        id: `pos-${i + 1}`,
+        kindergarten_id: tenantId,
+        name,
+        created_at: now,
+        updated_at: now,
+      }))
+      await seedTenantDefaults(tenantId, seededPositions, DEFAULT_LEAVE_TIERS)
+      data = await loadAll(tenantId)
     }
-    // 앱 설정(대체교사 활성화/기본일)은 별도 테이블에서 회복력 있게 로드
-    const settings = await db.loadSettings()
+
+    const settings = await db.loadSettings(tenantId)
     const enabled = settings['substitute_enabled']
     const defDays = settings['substitute_default_days']
     state = {
       staff: data.staff,
       positions: data.positions,
-      leaveTiers: data.leaveTiers.length ? data.leaveTiers : state.leaveTiers,
+      leaveTiers: data.leaveTiers.length ? data.leaveTiers : DEFAULT_LEAVE_TIERS.map((t) => ({ ...t })),
       balances: data.balances,
       adjustments: data.adjustments,
       leaveHistory: data.leaveHistory,
       subBalances: data.subBalances,
       subUsages: data.subUsages,
-      substituteEnabled: typeof enabled === 'boolean' ? enabled : state.substituteEnabled,
-      substituteDefaultDays:
-        typeof defDays === 'number' ? defDays : state.substituteDefaultDays,
+      substituteEnabled: typeof enabled === 'boolean' ? enabled : true,
+      substituteDefaultDays: typeof defDays === 'number' ? defDays : DEFAULT_SUBSTITUTE_DAYS,
     }
     emit()
   } catch {
     hydrated = false // 다음 마운트에서 재시도 허용
   }
+}
+
+/** 로그아웃 / 테넌트 전환 시 호출 — 스토어 잔존 데이터 제거 */
+export function resetStore() {
+  hydrated = false
+  currentTenant = null
+  setDbTenant(null)
+  state = emptyState()
+  emit()
 }
 
 interface StaffInput {
@@ -241,7 +217,7 @@ export function addStaff(input: StaffInput) {
   const now = new Date().toISOString()
   const newStaff: Staff = {
     id,
-    kindergarten_id: 'kg-001',
+    kindergarten_id: currentTenant ?? '',
     name: input.name,
     staff_number: String(state.staff.length + 1).padStart(3, '0'),
     position_id: input.position_id,
@@ -319,7 +295,7 @@ export function addPosition(name: string): string {
   const now = new Date().toISOString()
   const pos: Position = {
     id,
-    kindergarten_id: 'kg-001',
+    kindergarten_id: currentTenant ?? '',
     name: name.trim(),
     created_at: now,
     updated_at: now,

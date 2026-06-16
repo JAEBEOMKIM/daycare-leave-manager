@@ -1895,3 +1895,35 @@ Import traces:
  GET /statistics 200 in 73ms (next.js: 46ms, application-code: 27ms)
  GET /statistics 200 in 71ms (next.js: 43ms, application-code: 27ms)
  GET /statistics 200 in 70ms (next.js: 45ms, application-code: 25ms)
+ GET /individual/staff-001 200 in 259ms (next.js: 77ms, application-code: 182ms)
+ GET /leave?edit=history-8c168998-57 200 in 79ms (next.js: 62ms, application-code: 17ms)
+ GET /leave?edit=edittest-1 200 in 164ms (next.js: 4ms, application-code: 160ms)
+ GET /individual/staff-001 200 in 37ms (next.js: 12ms, application-code: 24ms)
+ GET /leave?edit=edittest-1 200 in 167ms (next.js: 9ms, application-code: 158ms)
+ GET /individual/staff-001 200 in 93ms (next.js: 29ms, application-code: 63ms)
+ GET /individual/staff-001 200 in 140ms (next.js: 29ms, application-code: 111ms)
+ GET /leave?edit=history-8c168998-57 200 in 33ms (next.js: 3ms, application-code: 29ms)
+ GET /individual/staff-001 200 in 73ms (next.js: 24ms, application-code: 49ms)
+ GET /dashboard 200 in 212ms (next.js: 158ms, application-code: 54ms)
+ GET /individual 200 in 212ms (next.js: 159ms, application-code: 54ms)
+ GET /individual/staff-002 200 in 70ms (next.js: 24ms, application-code: 46ms)
+ GET /dashboard 200 in 47ms (next.js: 4ms, application-code: 43ms)
+ GET /individual 200 in 37ms (next.js: 3ms, application-code: 33ms)
+ GET /individual/staff-002 200 in 59ms (next.js: 21ms, application-code: 39ms)
+ GET /individual 200 in 55ms (next.js: 7ms, application-code: 47ms)
+ GET /staff 200 in 201ms (next.js: 152ms, application-code: 49ms)
+ GET /settings 200 in 202ms (next.js: 154ms, application-code: 47ms)
+ GET /requests 200 in 177ms (next.js: 147ms, application-code: 30ms)
+ GET /individual 200 in 50ms (next.js: 5ms, application-code: 44ms)
+✓ Compiled in 199ms
+✓ Compiled in 1236ms
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+✓ Compiled in 180ms
+✓ Compiled in 82ms
+✓ Compiled in 118ms
+✓ Compiled in 208ms
+✓ Compiled in 49ms
+✓ Compiled in 130ms
+✓ Compiled in 112ms
+ GET /auth/login 200 in 2.8s (next.js: 2.2s, proxy.ts: 171ms, application-code: 491ms)
+[?25h

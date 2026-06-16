@@ -1,28 +1,16 @@
-'use client'
+import { requireDashboardTenant } from '@/lib/supabase/server'
+import { DashboardShell } from '@/components/layout/DashboardShell'
 
-import { useState } from 'react'
-import { Header } from '@/components/layout/Header'
-import { Sidebar } from '@/components/layout/Sidebar'
-import { StoreHydrator } from '@/components/StoreHydrator'
-
-export default function DashboardLayout({
+// 달력 대시보드 (full-bleed). 세션/테넌트 게이팅 후 tenantId 주입.
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-
+  const tenantId = await requireDashboardTenant()
   return (
-    <div className="h-screen bg-background overflow-hidden">
-      <StoreHydrator />
-      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-
-      <div className="md:ml-[280px] flex flex-col h-screen overflow-hidden">
-        <Header onMenuClick={() => setSidebarOpen(true)} />
-
-        {/* Full-bleed content (calendar dashboard) */}
-        <div className="flex-1 overflow-hidden">{children}</div>
-      </div>
-    </div>
+    <DashboardShell tenantId={tenantId} variant="full-bleed">
+      {children}
+    </DashboardShell>
   )
 }

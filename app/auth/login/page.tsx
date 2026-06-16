@@ -36,15 +36,29 @@ function LoginForm() {
       return
     }
 
-    window.location.href = '/dashboard'
+    window.location.href = searchParams.get('next') || '/'
   }
 
-  const handleKakaoLogin = () => {
-    window.location.href = `/api/auth/kakao?redirect=${encodeURIComponent('/dashboard')}`
+  // Google·Kakao 는 Supabase 네이티브 OAuth (안전)
+  const handleOAuth = async (provider: 'google' | 'kakao') => {
+    setLoading(true)
+    const supabase = createClient()
+    const next = searchParams.get('next') || '/'
+    const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+      },
+    })
+    if (oauthError) {
+      setError(oauthError.message)
+      setLoading(false)
+    }
   }
 
+  // 네이버는 Supabase 미지원 → 커스텀 라우트 유지
   const handleNaverLogin = () => {
-    window.location.href = `/api/auth/naver?redirect=${encodeURIComponent('/dashboard')}`
+    window.location.href = `/api/auth/naver?redirect=${encodeURIComponent(searchParams.get('next') || '/')}`
   }
 
   return (
@@ -129,7 +143,14 @@ function LoginForm() {
         {/* Social Login */}
         <div className="space-y-3 mb-8">
           <button
-            onClick={handleKakaoLogin}
+            onClick={() => handleOAuth('google')}
+            disabled={loading}
+            className="w-full py-3 bg-white text-gray-700 border border-border-subtle rounded-lg font-inter text-label-md font-bold hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Google로 로그인
+          </button>
+          <button
+            onClick={() => handleOAuth('kakao')}
             disabled={loading}
             className="w-full py-3 bg-yellow-400 text-black rounded-lg font-inter text-label-md font-bold hover:bg-yellow-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
