@@ -1,4 +1,4 @@
-import { createAdminClient } from '@/lib/supabase/server'
+import { createClient } from '@/lib/supabase/server'
 import {
   approveDaycare,
   rejectDaycare,
@@ -38,7 +38,8 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 export default async function AdminDaycaresPage() {
-  const admin = await createAdminClient()
+  // 관리자는 is_admin() RLS 로 전체 조회 가능 → 서비스 롤 불필요
+  const admin = await createClient()
   const { data: kgs } = await admin
     .from('kindergartens')
     .select('*')
