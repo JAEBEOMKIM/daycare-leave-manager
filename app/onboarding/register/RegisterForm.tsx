@@ -1,8 +1,9 @@
 'use client'
 
-import { useCallback, useEffect, useState, useTransition } from 'react'
+import { useCallback, useMemo, useState, useTransition } from 'react'
 import { Search, Building2, Loader2, Check } from 'lucide-react'
 import type { ChildcareItem } from '@/app/api/childcare/search/route'
+import { SIGUNGU } from '@/lib/sigungu'
 import { registerKindergarten } from './actions'
 
 const SIDO = [
@@ -25,29 +26,20 @@ export function RegisterForm({ errorCode }: { errorCode?: string }) {
 
   // 검색 상태
   const [sido, setSido] = useState(SIDO[0])
-  const [regions, setRegions] = useState<{ name: string; arcode: string }[]>([])
-  const [arcode, setArcode] = useState('') // 선택된 시군구 5자리 코드
+  const regions = useMemo(() => SIGUNGU[sido] ?? [], [sido])
+  const [arcode, setArcode] = useState(SIGUNGU[SIDO[0]]?.[0]?.code ?? '') // 선택된 시군구 5자리 코드
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<ChildcareItem[]>([])
   const [searchMsg, setSearchMsg] = useState<string | null>(null)
   const [pending, startSearch] = useTransition()
 
-  // 시도 변경 시 시군구 목록(cpmsapi020) 로드
-  useEffect(() => {
-    let active = true
-    setRegions([])
-    setArcode('')
-    fetch(`/api/childcare/search?mode=regions&sido=${encodeURIComponent(sido)}`)
-      .then((r) => r.json())
-      .then((j) => {
-        if (!active) return
-        const list = Array.isArray(j.regions) ? (j.regions as { name: string; arcode: string }[]) : []
-        setRegions(list)
-        if (list.length) setArcode(list[0].arcode)
-      })
-      .catch(() => {})
-    return () => { active = false }
-  }, [sido])
+  // 시도 변경 → 해당 시도 첫 시군구로 arcode 설정
+  const onSidoChange = useCallback((value: string) => {
+    setSido(value)
+    setArcode(SIGUNGU[value]?.[0]?.code ?? '')
+    setResults([])
+    setSearchMsg(null)
+  }, [])
 
   const runSearch = useCallback(() => {
     setSearchMsg(null)
@@ -92,20 +84,16 @@ export function RegisterForm({ errorCode }: { errorCode?: string }) {
           <h2 className="text-title-md font-semibold">어린이집 정보 검색 (공공데이터)</h2>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-[160px_160px_1fr_auto] gap-2">
-          <select value={sido} onChange={(e) => setSido(e.target.value)} className={inputCls}>
+          <select value={sido} onChange={(e) => onSidoChange(e.target.value)} className={inputCls}>
             {SIDO.map((s) => (
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
-          {regions.length > 0 ? (
-            <select value={arcode} onChange={(e) => setArcode(e.target.value)} className={inputCls}>
-              {regions.map((r) => (
-                <option key={r.arcode} value={r.arcode}>{r.name}</option>
-              ))}
-            </select>
-          ) : (
-            <input value={arcode} onChange={(e) => setArcode(e.target.value)} placeholder="시군구 코드 5자리 (예: 11680)" className={inputCls} />
-          )}
+          <select value={arcode} onChange={(e) => setArcode(e.target.value)} className={inputCls}>
+            {regions.map((r) => (
+              <option key={r.code} value={r.code}>{r.name}</option>
+            ))}
+          </select>
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
