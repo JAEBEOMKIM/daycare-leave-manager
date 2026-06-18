@@ -138,6 +138,36 @@ export async function GET(request: NextRequest) {
   const arcodeParam = (searchParams.get('arcode') ?? '').trim()
 
   const isChildcare = base.includes('childcare.go.kr')
+
+  // 시군구 목록 모드: cpmsapi020 로 시도(2자리)의 시군구 + arcode 조회
+  if (searchParams.get('mode') === 'regions') {
+    const sidoArcode = arcodeParam || SIDO_ARCODE[sido] || ''
+    if (!isChildcare || !sidoArcode) return NextResponse.json({ regions: [] })
+    const rurl = new URL(base.replace('cpmsapi030', 'cpmsapi020'))
+    rurl.searchParams.set('key', key)
+    rurl.searchParams.set('arcode', sidoArcode)
+    try {
+      const r = await fetch(rurl.toString(), { headers: { Accept: 'application/xml' } })
+      const tx = await r.text()
+      if (debug) {
+        return NextResponse.json({
+          requestUrl: rurl.toString().replace(encodeURIComponent(key), '***').replace(key, '***'),
+          status: r.status,
+          rawHead: tx.slice(0, 800),
+        })
+      }
+      const regions = extractRows(tx)
+        .map((row) => ({
+          name: pick(row, ['sigunname', 'arname', 'sigun', '시군구', 'SIGUNGU']),
+          arcode: pick(row, ['arcode', 'siguncode', 'ARCODE', '시군구코드', 'arcd']),
+        }))
+        .filter((x) => x.name && x.arcode)
+      return NextResponse.json({ regions })
+    } catch {
+      return NextResponse.json({ regions: [] })
+    }
+  }
+
   const url = new URL(base)
 
   if (isChildcare) {
@@ -227,12 +257,13 @@ function extractRows(text: string): Row[] {
     }
     return []
   }
-  // XML: <item>…</item> 반복을 평탄한 객체로
+  // XML: <item>…</item> 반복을 평탄한 객체로. 바깥 item 태그는 제거 후 내부 필드만 파싱.
   const out: Row[] = []
-  const items = t.match(/<item>[\s\S]*?<\/item>/g) ?? []
+  const items = t.match(/<item\b[^>]*>[\s\S]*?<\/item>/g) ?? []
   for (const block of items) {
+    const inner = block.replace(/^<item\b[^>]*>/, '').replace(/<\/item>\s*$/, '')
     const row: Row = {}
-    const fields = block.matchAll(/<([A-Za-z0-9_가-힣]+)>([\s\S]*?)<\/\1>/g)
+    const fields = inner.matchAll(/<([A-Za-z0-9_]+)>([\s\S]*?)<\/\1>/g)
     for (const m of fields) {
       let val = m[2].trim()
       const cd = val.match(/^<!\[CDATA\[([\s\S]*?)\]\]>$/)

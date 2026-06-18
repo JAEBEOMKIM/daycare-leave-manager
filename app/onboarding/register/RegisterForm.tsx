@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useState, useTransition } from 'react'
+import { useCallback, useEffect, useState, useTransition } from 'react'
 import { Search, Building2, Loader2, Check } from 'lucide-react'
 import type { ChildcareItem } from '@/app/api/childcare/search/route'
 import { registerKindergarten } from './actions'
@@ -25,17 +25,35 @@ export function RegisterForm({ errorCode }: { errorCode?: string }) {
 
   // 검색 상태
   const [sido, setSido] = useState(SIDO[0])
-  const [sigungu, setSigungu] = useState('')
+  const [regions, setRegions] = useState<{ name: string; arcode: string }[]>([])
+  const [arcode, setArcode] = useState('') // 선택된 시군구 5자리 코드
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<ChildcareItem[]>([])
   const [searchMsg, setSearchMsg] = useState<string | null>(null)
   const [pending, startSearch] = useTransition()
 
+  // 시도 변경 시 시군구 목록(cpmsapi020) 로드
+  useEffect(() => {
+    let active = true
+    setRegions([])
+    setArcode('')
+    fetch(`/api/childcare/search?mode=regions&sido=${encodeURIComponent(sido)}`)
+      .then((r) => r.json())
+      .then((j) => {
+        if (!active) return
+        const list = Array.isArray(j.regions) ? (j.regions as { name: string; arcode: string }[]) : []
+        setRegions(list)
+        if (list.length) setArcode(list[0].arcode)
+      })
+      .catch(() => {})
+    return () => { active = false }
+  }, [sido])
+
   const runSearch = useCallback(() => {
     setSearchMsg(null)
     startSearch(async () => {
       try {
-        const p = new URLSearchParams({ sido, sigungu, name: query })
+        const p = new URLSearchParams({ sido, arcode, name: query })
         const res = await fetch(`/api/childcare/search?${p.toString()}`)
         const json = await res.json()
         if (json.configured === false) {
@@ -54,7 +72,7 @@ export function RegisterForm({ errorCode }: { errorCode?: string }) {
         setSearchMsg('검색 중 오류가 발생했습니다.')
       }
     })
-  }, [sido, sigungu, query])
+  }, [sido, arcode, query])
 
   const choose = useCallback((it: ChildcareItem) => {
     setSelected(it)
@@ -79,7 +97,15 @@ export function RegisterForm({ errorCode }: { errorCode?: string }) {
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
-          <input value={sigungu} onChange={(e) => setSigungu(e.target.value)} placeholder="시군구 (예: 강남구)" className={inputCls} />
+          {regions.length > 0 ? (
+            <select value={arcode} onChange={(e) => setArcode(e.target.value)} className={inputCls}>
+              {regions.map((r) => (
+                <option key={r.arcode} value={r.arcode}>{r.name}</option>
+              ))}
+            </select>
+          ) : (
+            <input value={arcode} onChange={(e) => setArcode(e.target.value)} placeholder="시군구 코드 5자리 (예: 11680)" className={inputCls} />
+          )}
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
