@@ -32,6 +32,15 @@ export async function registerKindergarten(formData: FormData) {
     const v = std[k]
     return typeof v === 'number' ? v : v == null || v === '' ? null : Number(v) || null
   }
+  // 사용자가 입력/수정한 필드(폼 값 우선)
+  const fs = (k: string) => {
+    const v = String(formData.get(k) ?? '').trim()
+    return v === '' ? null : v
+  }
+  const fn = (k: string) => {
+    const v = String(formData.get(k) ?? '').replace(/[^0-9]/g, '')
+    return v === '' ? null : Number(v)
+  }
 
   const id = 'kg-' + crypto.randomUUID().slice(0, 8)
 
@@ -48,18 +57,18 @@ export async function registerKindergarten(formData: FormData) {
     // 표준데이터 필드
     sido: s('sido'),
     sigungu: s('sigungu'),
-    facility_type: s('facility_type'),
-    operation_status: s('operation_status'),
+    facility_type: fs('facility_type') ?? s('facility_type'),
+    operation_status: fs('operation_status') ?? s('operation_status'),
     zipcode: s('zipcode'),
     fax: s('fax'),
     homepage: s('homepage'),
-    capacity: n('capacity'),
-    current_count: n('current_count'),
+    capacity: fn('capacity') ?? n('capacity'),
+    current_count: fn('current_count') ?? n('current_count'),
     classroom_count: n('classroom_count'),
     classroom_area: n('classroom_area'),
     playground_count: n('playground_count'),
-    cctv_count: n('cctv_count'),
-    staff_count: n('staff_count'),
+    cctv_count: fn('cctv_count') ?? n('cctv_count'),
+    staff_count: fn('staff_count') ?? n('staff_count'),
     latitude: n('latitude'),
     longitude: n('longitude'),
     commute_vehicle: s('commute_vehicle'),

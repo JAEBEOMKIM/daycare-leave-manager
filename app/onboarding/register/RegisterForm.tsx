@@ -15,12 +15,25 @@ const SIDO = [
 const inputCls =
   'w-full rounded-lg border border-outline-variant px-4 py-2.5 text-body-md outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary'
 
+// 어린이집유형/운영현황 표준 명칭(API가 명칭 반환). 목록에 없는 값은 그대로 보존.
+const FACILITY_TYPES = ['국공립', '사회복지법인', '법인·단체등', '민간', '가정', '협동', '직장']
+const OPERATION_STATUSES = ['정상', '휴지', '폐지']
+const onlyDigits = (v: string) => v.replace(/[^0-9]/g, '')
+const withCurrent = (list: string[], cur: string) =>
+  cur && !list.includes(cur) ? [cur, ...list] : list
+
 export function RegisterForm({ errorCode }: { errorCode?: string }) {
   // 폼 필드(수정 가능)
   const [name, setName] = useState('')
   const [businessNo, setBusinessNo] = useState('')
   const [phone, setPhone] = useState('')
   const [address, setAddress] = useState('')
+  const [facilityType, setFacilityType] = useState('')
+  const [operationStatus, setOperationStatus] = useState('')
+  const [capacity, setCapacity] = useState('')
+  const [currentCount, setCurrentCount] = useState('')
+  const [staffCount, setStaffCount] = useState('')
+  const [cctvCount, setCctvCount] = useState('')
   // 검색으로 선택된 표준데이터(나머지 필드 일괄 보관)
   const [selected, setSelected] = useState<ChildcareItem | null>(null)
 
@@ -71,6 +84,12 @@ export function RegisterForm({ errorCode }: { errorCode?: string }) {
     setName(it.name)
     setPhone(it.phone ?? '')
     setAddress(it.address ?? '')
+    setFacilityType(it.facility_type ?? '')
+    setOperationStatus(it.operation_status ?? '')
+    setCapacity(it.capacity != null ? String(it.capacity) : '')
+    setCurrentCount(it.current_count != null ? String(it.current_count) : '')
+    setStaffCount(it.staff_count != null ? String(it.staff_count) : '')
+    setCctvCount(it.cctv_count != null ? String(it.cctv_count) : '')
     setResults([])
     setSearchMsg(null)
   }, [])
@@ -189,17 +208,47 @@ export function RegisterForm({ errorCode }: { errorCode?: string }) {
           <input name="address" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="시/군/구 ..." className={inputCls} />
         </div>
 
-        {/* 표준데이터 요약(읽기 전용 미리보기) */}
-        {selected ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 rounded-lg bg-surface-container-low p-3 text-label-sm text-on-surface-variant">
-            <span>유형: {selected.facility_type ?? '-'}</span>
-            <span>운영: {selected.operation_status ?? '-'}</span>
-            <span>정원: {selected.capacity ?? '-'}</span>
-            <span>현원: {selected.current_count ?? '-'}</span>
-            <span>교직원: {selected.staff_count ?? '-'}</span>
-            <span>CCTV: {selected.cctv_count ?? '-'}</span>
+        {/* 유형 · 운영 (셀렉트) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-label-md font-medium text-on-surface mb-1">어린이집 유형</label>
+            <select name="facility_type" value={facilityType} onChange={(e) => setFacilityType(e.target.value)} className={inputCls}>
+              <option value="">선택</option>
+              {withCurrent(FACILITY_TYPES, facilityType).map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
           </div>
-        ) : null}
+          <div>
+            <label className="block text-label-md font-medium text-on-surface mb-1">운영현황</label>
+            <select name="operation_status" value={operationStatus} onChange={(e) => setOperationStatus(e.target.value)} className={inputCls}>
+              <option value="">선택</option>
+              {withCurrent(OPERATION_STATUSES, operationStatus).map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* 정원 · 현원 · 교직원 · CCTV (숫자만) */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-label-md font-medium text-on-surface mb-1">정원</label>
+            <input name="capacity" inputMode="numeric" value={capacity} onChange={(e) => setCapacity(onlyDigits(e.target.value))} placeholder="0" className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-label-md font-medium text-on-surface mb-1">현원</label>
+            <input name="current_count" inputMode="numeric" value={currentCount} onChange={(e) => setCurrentCount(onlyDigits(e.target.value))} placeholder="0" className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-label-md font-medium text-on-surface mb-1">교직원</label>
+            <input name="staff_count" inputMode="numeric" value={staffCount} onChange={(e) => setStaffCount(onlyDigits(e.target.value))} placeholder="0" className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-label-md font-medium text-on-surface mb-1">CCTV</label>
+            <input name="cctv_count" inputMode="numeric" value={cctvCount} onChange={(e) => setCctvCount(onlyDigits(e.target.value))} placeholder="0" className={inputCls} />
+          </div>
+        </div>
 
         <button type="submit" className="w-full py-3 rounded-lg bg-primary text-on-primary font-label-md font-semibold hover:opacity-90 transition-opacity">
           등록하고 승인 요청
