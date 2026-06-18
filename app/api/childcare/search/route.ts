@@ -172,6 +172,7 @@ export async function GET(request: NextRequest) {
     if (debug) {
       return NextResponse.json({
         configured: true,
+        requestUrl: url.toString().replace(encodeURIComponent(key), '***').replace(key, '***'),
         status: res.status,
         contentType: res.headers.get('content-type'),
         rawHead: text.slice(0, 1500),
