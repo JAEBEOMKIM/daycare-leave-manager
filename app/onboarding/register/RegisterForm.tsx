@@ -83,33 +83,46 @@ export function RegisterForm({ errorCode }: { errorCode?: string }) {
           <Search size={18} className="text-primary" />
           <h2 className="text-title-md font-semibold">어린이집 정보 검색 (공공데이터)</h2>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-[160px_160px_1fr_auto] gap-2">
-          <select value={sido} onChange={(e) => onSidoChange(e.target.value)} className={inputCls}>
-            {SIDO.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
-          <select value={arcode} onChange={(e) => setArcode(e.target.value)} className={inputCls}>
-            {regions.map((r) => (
-              <option key={r.code} value={r.code}>{r.name}</option>
-            ))}
-          </select>
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); runSearch() } }}
-            placeholder="어린이집명 (부분 검색)"
-            className={inputCls}
-          />
-          <button
-            type="button"
-            onClick={runSearch}
-            disabled={pending}
-            className="px-5 py-2.5 rounded-lg bg-primary text-on-primary text-label-md font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 inline-flex items-center gap-2 justify-center"
-          >
-            {pending ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
-            검색
-          </button>
+        {/* 1줄: 시도 · 시군구 */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div>
+            <label className="block text-label-sm text-on-surface-variant mb-1">시도</label>
+            <select value={sido} onChange={(e) => onSidoChange(e.target.value)} className={inputCls}>
+              {SIDO.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-label-sm text-on-surface-variant mb-1">시군구</label>
+            <select value={arcode} onChange={(e) => setArcode(e.target.value)} className={inputCls}>
+              {regions.map((r) => (
+                <option key={r.code} value={r.code}>{r.name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+        {/* 2줄: 어린이집명(넓게) + 검색 */}
+        <div className="mt-2">
+          <label className="block text-label-sm text-on-surface-variant mb-1">어린이집명</label>
+          <div className="flex gap-2">
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); runSearch() } }}
+              placeholder="어린이집명 일부를 입력 (예: 행복)"
+              className={`${inputCls} flex-1`}
+            />
+            <button
+              type="button"
+              onClick={runSearch}
+              disabled={pending}
+              className="shrink-0 px-6 py-2.5 rounded-lg bg-primary text-on-primary text-label-md font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 inline-flex items-center gap-2 justify-center"
+            >
+              {pending ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+              검색
+            </button>
+          </div>
         </div>
 
         {searchMsg ? <p className="mt-3 text-body-sm text-on-surface-variant">{searchMsg}</p> : null}
