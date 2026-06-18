@@ -1,7 +1,19 @@
 'use client'
 
 import { useCallback, useMemo, useState, useTransition } from 'react'
-import { Search, Building2, Loader2, Check } from 'lucide-react'
+import {
+  Search,
+  Building2,
+  Loader2,
+  CheckCircle2,
+  Users,
+  Baby,
+  GraduationCap,
+  Video,
+  Info,
+  FileText,
+  Headphones,
+} from 'lucide-react'
 import type { ChildcareItem } from '@/app/api/childcare/search/route'
 import { SIGUNGU } from '@/lib/sigungu'
 import { registerKindergarten } from './actions'
@@ -12,15 +24,45 @@ const SIDO = [
   '전북특별자치도', '전라남도', '경상북도', '경상남도', '제주특별자치도',
 ]
 
-const inputCls =
-  'w-full rounded-lg border border-outline-variant px-4 py-2.5 text-body-md outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary'
-
-// 어린이집유형/운영현황 표준 명칭(API가 명칭 반환). 목록에 없는 값은 그대로 보존.
 const FACILITY_TYPES = ['국공립', '사회복지법인', '법인·단체등', '민간', '가정', '협동', '직장']
 const OPERATION_STATUSES = ['정상', '휴지', '폐지']
 const onlyDigits = (v: string) => v.replace(/[^0-9]/g, '')
 const withCurrent = (list: string[], cur: string) =>
   cur && !list.includes(cur) ? [cur, ...list] : list
+
+const fieldCls =
+  'w-full h-11 rounded-lg border border-outline-variant bg-surface-white px-4 text-body-md text-on-surface outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary transition-all'
+const labelCls = 'text-label-md font-medium text-on-surface-variant'
+
+// 정원/현원/교직원/CCTV 통계 카드
+function StatCard({
+  icon, tag, label, name, value, onChange,
+}: {
+  icon: React.ReactNode
+  tag: string
+  label: string
+  name: string
+  value: string
+  onChange: (v: string) => void
+}) {
+  return (
+    <div className="p-4 bg-surface-white border border-outline-variant rounded-xl focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15 transition-all">
+      <div className="flex items-center justify-between mb-2">
+        {icon}
+        <span className="text-[10px] font-bold text-on-surface-variant tracking-wider uppercase">{tag}</span>
+      </div>
+      <label className="text-label-sm text-on-surface-variant">{label}</label>
+      <input
+        name={name}
+        inputMode="numeric"
+        value={value}
+        onChange={(e) => onChange(onlyDigits(e.target.value))}
+        placeholder="0"
+        className="w-full mt-1 p-0 border-none bg-transparent text-headline-md font-bold text-on-surface outline-none focus:ring-0"
+      />
+    </div>
+  )
+}
 
 export function RegisterForm({ errorCode }: { errorCode?: string }) {
   // 폼 필드(수정 가능)
@@ -34,19 +76,17 @@ export function RegisterForm({ errorCode }: { errorCode?: string }) {
   const [currentCount, setCurrentCount] = useState('')
   const [staffCount, setStaffCount] = useState('')
   const [cctvCount, setCctvCount] = useState('')
-  // 검색으로 선택된 표준데이터(나머지 필드 일괄 보관)
   const [selected, setSelected] = useState<ChildcareItem | null>(null)
 
   // 검색 상태
   const [sido, setSido] = useState(SIDO[0])
   const regions = useMemo(() => SIGUNGU[sido] ?? [], [sido])
-  const [arcode, setArcode] = useState(SIGUNGU[SIDO[0]]?.[0]?.code ?? '') // 선택된 시군구 5자리 코드
+  const [arcode, setArcode] = useState(SIGUNGU[SIDO[0]]?.[0]?.code ?? '')
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<ChildcareItem[]>([])
   const [searchMsg, setSearchMsg] = useState<string | null>(null)
   const [pending, startSearch] = useTransition()
 
-  // 시도 변경 → 해당 시도 첫 시군구로 arcode 설정
   const onSidoChange = useCallback((value: string) => {
     setSido(value)
     setArcode(SIGUNGU[value]?.[0]?.code ?? '')
@@ -96,71 +136,58 @@ export function RegisterForm({ errorCode }: { errorCode?: string }) {
 
   return (
     <>
-      {/* 검색 패널 */}
-      <section className="mt-6 rounded-xl border border-outline-variant bg-surface-container-low p-5">
-        <div className="flex items-center gap-2 mb-3 text-on-surface">
+      {/* 검색 카드 (라벤더) */}
+      <section className="bg-secondary-container/30 border border-secondary-container rounded-xl p-5 shadow-sm">
+        <div className="flex items-center gap-2 mb-4">
           <Search size={18} className="text-primary" />
-          <h2 className="text-title-md font-semibold">어린이집 정보 검색 (공공데이터)</h2>
+          <h3 className="text-title-md font-semibold text-on-secondary-container">어린이집 찾기</h3>
         </div>
-        {/* 1줄: 시도 · 시군구 */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <div>
-            <label className="block text-label-sm text-on-surface-variant mb-1">시도</label>
-            <select value={sido} onChange={(e) => onSidoChange(e.target.value)} className={inputCls}>
-              {SIDO.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="flex flex-col gap-1.5 md:col-span-1">
+            <label className={labelCls}>지역 (시도 / 시군구)</label>
+            <div className="grid grid-cols-2 gap-2">
+              <select value={sido} onChange={(e) => onSidoChange(e.target.value)} className={fieldCls}>
+                {SIDO.map((s) => (<option key={s} value={s}>{s}</option>))}
+              </select>
+              <select value={arcode} onChange={(e) => setArcode(e.target.value)} className={fieldCls}>
+                {regions.map((r) => (<option key={r.code} value={r.code}>{r.name}</option>))}
+              </select>
+            </div>
           </div>
-          <div>
-            <label className="block text-label-sm text-on-surface-variant mb-1">시군구</label>
-            <select value={arcode} onChange={(e) => setArcode(e.target.value)} className={inputCls}>
-              {regions.map((r) => (
-                <option key={r.code} value={r.code}>{r.name}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-        {/* 2줄: 어린이집명(넓게) + 검색 */}
-        <div className="mt-2">
-          <label className="block text-label-sm text-on-surface-variant mb-1">어린이집명</label>
-          <div className="flex gap-2">
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); runSearch() } }}
-              placeholder="어린이집명 일부를 입력 (예: 행복)"
-              className={`${inputCls} flex-1`}
-            />
-            <button
-              type="button"
-              onClick={runSearch}
-              disabled={pending}
-              className="shrink-0 px-6 py-2.5 rounded-lg bg-primary text-on-primary text-label-md font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 inline-flex items-center gap-2 justify-center"
-            >
-              {pending ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
-              검색
-            </button>
+          <div className="flex flex-col gap-1.5 md:col-span-2">
+            <label className={labelCls}>어린이집명</label>
+            <div className="relative">
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); runSearch() } }}
+                placeholder="어린이집명 일부를 입력 (예: 행복)"
+                className={`${fieldCls} pr-24`}
+              />
+              <button
+                type="button"
+                onClick={runSearch}
+                disabled={pending}
+                className="absolute right-1.5 top-1.5 bottom-1.5 px-4 bg-primary text-on-primary rounded-md text-label-md font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 inline-flex items-center gap-1.5"
+              >
+                {pending ? <Loader2 size={15} className="animate-spin" /> : <Search size={15} />}
+                검색
+              </button>
+            </div>
           </div>
         </div>
 
-        {searchMsg ? <p className="mt-3 text-body-sm text-on-surface-variant">{searchMsg}</p> : null}
+        {searchMsg ? <p className="mt-3 text-label-sm text-on-surface-variant">{searchMsg}</p> : null}
 
         {results.length > 0 ? (
           <ul className="mt-3 max-h-72 overflow-auto divide-y divide-outline-variant rounded-lg border border-outline-variant bg-surface-white">
             {results.map((it, i) => (
               <li key={`${it.stcode ?? it.name}-${i}`}>
-                <button
-                  type="button"
-                  onClick={() => choose(it)}
-                  className="w-full text-left px-4 py-3 hover:bg-surface-container-low transition-colors"
-                >
+                <button type="button" onClick={() => choose(it)} className="w-full text-left px-4 py-3 hover:bg-surface-container-low transition-colors">
                   <div className="flex items-center gap-2">
                     <Building2 size={16} className="text-primary shrink-0" />
                     <span className="font-semibold text-on-surface">{it.name}</span>
-                    {it.facility_type ? (
-                      <span className="text-label-sm text-on-surface-variant">· {it.facility_type}</span>
-                    ) : null}
+                    {it.facility_type ? <span className="text-label-sm text-on-surface-variant">· {it.facility_type}</span> : null}
                   </div>
                   <p className="mt-0.5 text-label-sm text-on-surface-variant truncate">
                     {it.address ?? '-'} {it.phone ? `· ${it.phone}` : ''}
@@ -172,88 +199,118 @@ export function RegisterForm({ errorCode }: { errorCode?: string }) {
         ) : null}
       </section>
 
-      {/* 등록 폼 */}
+      {/* 성공 배너 */}
+      {selected ? (
+        <div className="bg-success-green/10 border border-success-green/25 rounded-lg p-4 flex items-center gap-3">
+          <CheckCircle2 size={22} className="text-success-green shrink-0" />
+          <div>
+            <p className="text-label-md font-semibold text-on-surface">정보를 불러왔습니다</p>
+            <p className="text-label-sm text-on-surface-variant">
+              &ldquo;{selected.name}&rdquo; 정보가 적용되었습니다. 아래에서 확인·수정 후 등록하세요.
+            </p>
+          </div>
+        </div>
+      ) : null}
+
       {errorCode ? (
-        <p className="mt-4 rounded-lg bg-error-red/15 border border-error-red/30 px-4 py-2 text-body-sm text-error-red">
+        <p className="rounded-lg bg-error-red/15 border border-error-red/30 px-4 py-2.5 text-body-sm text-error-red">
           {errorCode === 'name' ? '어린이집 이름을 입력해 주세요.' : '등록 중 오류가 발생했습니다. 다시 시도해 주세요.'}
         </p>
       ) : null}
 
-      <form action={registerKindergarten} className="mt-6 space-y-4">
-        {/* 선택된 표준데이터 전체를 JSON 으로 전달 */}
+      {/* 메인 카드 */}
+      <form action={registerKindergarten}>
         <input type="hidden" name="standard" value={selected ? JSON.stringify(selected) : ''} />
 
-        {selected ? (
-          <div className="rounded-lg bg-success-green/10 border border-success-green/30 px-4 py-2.5 text-body-sm text-success-green flex items-center gap-2">
-            <Check size={16} /> 공공데이터에서 불러온 정보가 적용되었습니다. 필요 시 아래에서 수정하세요.
+        <div className="bg-surface-white rounded-xl border border-outline-variant shadow-sm p-6 md:p-8 flex flex-col gap-8">
+          {/* 기본 정보 */}
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-1 h-6 bg-primary rounded-full" />
+              <h4 className="text-title-lg font-semibold text-on-surface">기본 정보</h4>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls}>어린이집 이름 <span className="text-error">*</span></label>
+                <input name="name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="예: 구립아이솔 어린이집" className={fieldCls} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls}>사업자등록번호</label>
+                <input name="business_no" value={businessNo} onChange={(e) => setBusinessNo(e.target.value)} placeholder="000-00-00000" className={fieldCls} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls}>전화번호</label>
+                <input name="phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="02-000-0000" className={fieldCls} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls}>어린이집 유형</label>
+                <select name="facility_type" value={facilityType} onChange={(e) => setFacilityType(e.target.value)} className={fieldCls}>
+                  <option value="">선택</option>
+                  {withCurrent(FACILITY_TYPES, facilityType).map((t) => (<option key={t} value={t}>{t}</option>))}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5 md:col-span-2">
+                <label className={labelCls}>주소</label>
+                <input name="address" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="시/군/구 ..." className={fieldCls} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls}>운영현황</label>
+                <select name="operation_status" value={operationStatus} onChange={(e) => setOperationStatus(e.target.value)} className={fieldCls}>
+                  <option value="">선택</option>
+                  {withCurrent(OPERATION_STATUSES, operationStatus).map((s) => (<option key={s} value={s}>{s}</option>))}
+                </select>
+              </div>
+            </div>
           </div>
-        ) : null}
 
-        <div>
-          <label className="block text-label-md font-medium text-on-surface mb-1">어린이집 이름 <span className="text-error">*</span></label>
-          <input name="name" required value={name} onChange={(e) => setName(e.target.value)} placeholder="예: 구립아이솔 어린이집" className={inputCls} />
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* 정원 및 시설 */}
           <div>
-            <label className="block text-label-md font-medium text-on-surface mb-1">사업자등록번호</label>
-            <input name="business_no" value={businessNo} onChange={(e) => setBusinessNo(e.target.value)} placeholder="000-00-00000" className={inputCls} />
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-1 h-6 bg-primary rounded-full" />
+              <h4 className="text-title-lg font-semibold text-on-surface">정원 및 시설</h4>
+            </div>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <StatCard icon={<Users size={20} className="text-primary" />} tag="정원" label="정원" name="capacity" value={capacity} onChange={setCapacity} />
+              <StatCard icon={<Baby size={20} className="text-success-green" />} tag="현원" label="현원" name="current_count" value={currentCount} onChange={setCurrentCount} />
+              <StatCard icon={<GraduationCap size={20} className="text-warning-amber" />} tag="교직원" label="보육교직원" name="staff_count" value={staffCount} onChange={setStaffCount} />
+              <StatCard icon={<Video size={20} className="text-secondary" />} tag="CCTV" label="CCTV" name="cctv_count" value={cctvCount} onChange={setCctvCount} />
+            </div>
           </div>
-          <div>
-            <label className="block text-label-md font-medium text-on-surface mb-1">전화번호</label>
-            <input name="phone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="02-000-0000" className={inputCls} />
-          </div>
-        </div>
-        <div>
-          <label className="block text-label-md font-medium text-on-surface mb-1">주소</label>
-          <input name="address" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="시/군/구 ..." className={inputCls} />
-        </div>
 
-        {/* 유형 · 운영 (셀렉트) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-label-md font-medium text-on-surface mb-1">어린이집 유형</label>
-            <select name="facility_type" value={facilityType} onChange={(e) => setFacilityType(e.target.value)} className={inputCls}>
-              <option value="">선택</option>
-              {withCurrent(FACILITY_TYPES, facilityType).map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-label-md font-medium text-on-surface mb-1">운영현황</label>
-            <select name="operation_status" value={operationStatus} onChange={(e) => setOperationStatus(e.target.value)} className={inputCls}>
-              <option value="">선택</option>
-              {withCurrent(OPERATION_STATUSES, operationStatus).map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
+          {/* 푸터 */}
+          <div className="pt-6 border-t border-outline-variant flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-2 text-on-surface-variant">
+              <Info size={16} />
+              <p className="text-label-sm">등록 후 관리자 승인까지 영업일 기준 1~2일 소요될 수 있습니다.</p>
+            </div>
+            <button type="submit" className="w-full md:w-auto px-6 h-12 bg-primary text-on-primary rounded-lg text-title-md font-semibold shadow-sm hover:opacity-90 active:scale-[0.98] transition-all">
+              등록하고 승인 요청
+            </button>
           </div>
         </div>
-
-        {/* 정원 · 현원 · 교직원 · CCTV (숫자만) */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div>
-            <label className="block text-label-md font-medium text-on-surface mb-1">정원</label>
-            <input name="capacity" inputMode="numeric" value={capacity} onChange={(e) => setCapacity(onlyDigits(e.target.value))} placeholder="0" className={inputCls} />
-          </div>
-          <div>
-            <label className="block text-label-md font-medium text-on-surface mb-1">현원</label>
-            <input name="current_count" inputMode="numeric" value={currentCount} onChange={(e) => setCurrentCount(onlyDigits(e.target.value))} placeholder="0" className={inputCls} />
-          </div>
-          <div>
-            <label className="block text-label-md font-medium text-on-surface mb-1">교직원</label>
-            <input name="staff_count" inputMode="numeric" value={staffCount} onChange={(e) => setStaffCount(onlyDigits(e.target.value))} placeholder="0" className={inputCls} />
-          </div>
-          <div>
-            <label className="block text-label-md font-medium text-on-surface mb-1">CCTV</label>
-            <input name="cctv_count" inputMode="numeric" value={cctvCount} onChange={(e) => setCctvCount(onlyDigits(e.target.value))} placeholder="0" className={inputCls} />
-          </div>
-        </div>
-
-        <button type="submit" className="w-full py-3 rounded-lg bg-primary text-on-primary font-label-md font-semibold hover:opacity-90 transition-opacity">
-          등록하고 승인 요청
-        </button>
       </form>
+
+      {/* 도움말 카드 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="p-4 rounded-xl bg-surface-white border border-outline-variant flex items-start gap-4">
+          <div className="w-12 h-12 rounded-full bg-secondary-container flex items-center justify-center shrink-0">
+            <FileText size={22} className="text-primary" />
+          </div>
+          <div>
+            <h5 className="text-label-md font-bold text-on-surface">검색이 안 되나요?</h5>
+            <p className="text-body-md text-on-surface-variant mt-0.5">공공데이터에 없으면 위 양식에 직접 입력해 등록할 수 있습니다.</p>
+          </div>
+        </div>
+        <div className="p-4 rounded-xl bg-surface-white border border-outline-variant flex items-start gap-4">
+          <div className="w-12 h-12 rounded-full bg-secondary-container flex items-center justify-center shrink-0">
+            <Headphones size={22} className="text-primary" />
+          </div>
+          <div>
+            <h5 className="text-label-md font-bold text-on-surface">도움이 필요하신가요?</h5>
+            <p className="text-body-md text-on-surface-variant mt-0.5">등록에 어려움이 있으면 관리자에게 문의해 주세요.</p>
+          </div>
+        </div>
+      </div>
     </>
   )
 }
