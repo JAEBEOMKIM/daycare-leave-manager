@@ -143,7 +143,7 @@ export async function GET(request: NextRequest) {
   if (searchParams.get('mode') === 'regions') {
     const sidoArcode = arcodeParam || SIDO_ARCODE[sido] || ''
     if (!isChildcare || !sidoArcode) return NextResponse.json({ regions: [] })
-    const rurl = new URL(base.replace('cpmsapi030', 'cpmsapi020'))
+    const rurl = new URL(base.replace(/cpmsapi030/g, 'cpmsapi020'))
     rurl.searchParams.set('key', key)
     rurl.searchParams.set('arcode', sidoArcode)
     try {
