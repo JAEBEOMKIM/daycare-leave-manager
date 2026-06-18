@@ -170,12 +170,15 @@ export async function GET(request: NextRequest) {
     const text = await res.text()
 
     if (debug) {
+      const dRows = extractRows(text)
       return NextResponse.json({
         configured: true,
         requestUrl: url.toString().replace(encodeURIComponent(key), '***').replace(key, '***'),
         status: res.status,
         contentType: res.headers.get('content-type'),
-        rawHead: text.slice(0, 1500),
+        itemCount: dRows.length,
+        sampleNames: dRows.slice(0, 5).map((r) => pick(r, FIELD.name)),
+        rawHead: text.slice(0, 800),
       })
     }
     if (!res.ok) {
