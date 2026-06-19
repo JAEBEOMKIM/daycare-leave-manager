@@ -10,75 +10,80 @@ async function adminClient() {
   return createClient()
 }
 
-/** 승인: 어린이집 활성화 + 사용기한 설정 + 원장 프로필 활성화 */
-export async function approveDaycare(formData: FormData) {
-  const admin = await adminClient()
-  const id = String(formData.get('id') ?? '')
-  const validUntil = String(formData.get('valid_until') ?? '').trim() || null
-  if (!id) return
+const nowIso = () => new Date().toISOString()
+const clean = (v?: string | null) => (v && v.trim() ? v.trim() : null)
 
-  // 원장 접근 권한은 kindergartens 상태로 게이팅되므로 profiles.status 갱신은 불필요.
+export interface ValidityInput {
+  id: string
+  validFrom?: string | null
+  validUntil?: string | null
+}
+
+/** 승인: 활성화 + 사용기한(from~to) + 승인일자=현재시간 */
+export async function approveDaycare({ id, validFrom, validUntil }: ValidityInput) {
+  if (!id) return
+  const admin = await adminClient()
   await admin
     .from('kindergartens')
     .update({
       status: 'active',
       active: true,
-      approved_at: new Date().toISOString(),
-      valid_from: new Date().toISOString().slice(0, 10),
-      valid_until: validUntil,
+      approved_at: nowIso(),
+      valid_from: clean(validFrom) ?? new Date().toISOString().slice(0, 10),
+      valid_until: clean(validUntil),
       rejected_reason: null,
-      updated_at: new Date().toISOString(),
+      updated_at: nowIso(),
     })
     .eq('id', id)
   revalidatePath('/admin/daycares')
 }
 
-/** 거절 */
-export async function rejectDaycare(formData: FormData) {
-  const admin = await adminClient()
-  const id = String(formData.get('id') ?? '')
-  const reason = String(formData.get('reason') ?? '').trim() || null
+/** 반려: 사유 + 처리일자(approved_at)=현재시간 */
+export async function rejectDaycare({ id, reason }: { id: string; reason?: string | null }) {
   if (!id) return
+  const admin = await adminClient()
   await admin
     .from('kindergartens')
-    .update({ status: 'rejected', active: false, rejected_reason: reason, updated_at: new Date().toISOString() })
+    .update({
+      status: 'rejected',
+      active: false,
+      rejected_reason: clean(reason),
+      approved_at: nowIso(),
+      updated_at: nowIso(),
+    })
     .eq('id', id)
   revalidatePath('/admin/daycares')
 }
 
 /** 사용 일시중지 */
-export async function suspendDaycare(formData: FormData) {
-  const admin = await adminClient()
-  const id = String(formData.get('id') ?? '')
+export async function suspendDaycare(id: string) {
   if (!id) return
+  const admin = await adminClient()
   await admin
     .from('kindergartens')
-    .update({ status: 'suspended', active: false, updated_at: new Date().toISOString() })
+    .update({ status: 'suspended', active: false, updated_at: nowIso() })
     .eq('id', id)
   revalidatePath('/admin/daycares')
 }
 
-/** 사용 재개 */
-export async function reactivateDaycare(formData: FormData) {
-  const admin = await adminClient()
-  const id = String(formData.get('id') ?? '')
+/** 사용 재개: 활성화 + (옵션) 사용기한 갱신 */
+export async function reactivateDaycare({ id, validFrom, validUntil }: ValidityInput) {
   if (!id) return
-  await admin
-    .from('kindergartens')
-    .update({ status: 'active', active: true, updated_at: new Date().toISOString() })
-    .eq('id', id)
+  const admin = await adminClient()
+  const patch: Record<string, unknown> = { status: 'active', active: true, updated_at: nowIso() }
+  if (validFrom !== undefined) patch.valid_from = clean(validFrom)
+  if (validUntil !== undefined) patch.valid_until = clean(validUntil)
+  await admin.from('kindergartens').update(patch).eq('id', id)
   revalidatePath('/admin/daycares')
 }
 
-/** 사용기한(만료일) 변경 */
-export async function setValidUntil(formData: FormData) {
-  const admin = await adminClient()
-  const id = String(formData.get('id') ?? '')
-  const validUntil = String(formData.get('valid_until') ?? '').trim() || null
+/** 사용기한(from~to) 변경 */
+export async function setValidity({ id, validFrom, validUntil }: ValidityInput) {
   if (!id) return
+  const admin = await adminClient()
   await admin
     .from('kindergartens')
-    .update({ valid_until: validUntil, updated_at: new Date().toISOString() })
+    .update({ valid_from: clean(validFrom), valid_until: clean(validUntil), updated_at: nowIso() })
     .eq('id', id)
   revalidatePath('/admin/daycares')
 }
